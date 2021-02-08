@@ -138,7 +138,7 @@ let
 
     ### run executable
     export PROOT_NO_SECCOMP=1
-    \$dir/bin/proot -b \$dir/store:/nix/store \$bin \$@
+    \$dir/bin/proot -b \$dir/store:/nix/store \$bin "\$@"
   '';
 
   runtimeScriptEscaped = replaceStrings ["\""] ["\\\""] runtimeScript;
