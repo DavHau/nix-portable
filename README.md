@@ -1,8 +1,6 @@
 ## nix-portable
 Nix - Static, Permissionless, Installation-free, Pre-configured
 
-!!! This project is work in progress !!! (nix builds do not yet work)
-
 The goal of this project is to provide Nix as a single binary which just works without any previous installation/configuration and without the need of super user privileges.
 
 ### Under the hood:
