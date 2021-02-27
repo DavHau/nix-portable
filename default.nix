@@ -1,11 +1,15 @@
 with builtins;
 {
   pkgs ? import <nixpkgs> {},
+  pkgsOverlayed ? import <nixpkgs> {},
   nix ? (builtins.getFlake "nix/480426a364f09e7992230b32f2941a09fb52d729").packages.x86_64-linux.nix-static,
+  tb,
   ...
 }:
 let
   proot = import ./proot/gitlab.nix { inherit pkgs; };
+
+  bwrap = pkgsOverlayed.pkgsStatic.bubblewrap;
 
   maketar = targets:
     pkgs.stdenv.mkDerivation {
@@ -25,7 +29,7 @@ let
       '';
     };
 
-  storeTar = maketar (with pkgs; [ cacert nix path gnutar gzip ]);
+  storeTar = maketar (with pkgs; [ busybox cacert nix path gnutar gzip ]);
 
 
   # The runtime script which unpacks the necessary files to $HOME/.nix-portable
@@ -35,12 +39,29 @@ let
   runtimeScript = ''
     #!/usr/bin/env bash
 
+    set -e
+
     debug(){
-      [ -n "\$NIX_PORTABLE_DEBUG" ] && echo $@
+      [ -n "\$NIX_PORTABLE_DEBUG" ] && echo \$@
     }
       
     dir=\$HOME/.nix-portable
     mkdir -p \$dir/bin
+
+
+    ### setup SSL
+    # find ssl certs or use from nixpkgs
+    debug "figuring out ssl certs"
+    if [ -z "\$SSL_CERT_FILE" ]; then
+      debug "SSL_CERT_FILE not defined. trying to find certs automatically"
+      if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
+        debug "found /etc/ssl/certs/ca-bundle.crt"
+        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
+      elif [ ! -e /etc/ssl/certs ]; then
+        debug "/etc/ssl/certs does not exist, using certs from nixpkgs"
+        export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+      fi
+    fi
 
 
     ### install proot
@@ -49,26 +70,71 @@ let
     END
 
 
+    ### install bwrap
+    (base64 -d > \$dir/bin/bwrap && chmod +x \$dir/bin/bwrap) << END
+    $(cat ${bwrap}/bin/bwrap | base64)
+    END
+
+
     ### install xz and tar
     (base64 -d > \$dir/bin/xz && chmod +x \$dir/bin/xz) << END
     $(cat ${pkgs.pkgsStatic.xz}/bin/xz | base64)
     END
-    export PATH="\$dir/bin/:\$PATH"
 
     (base64 -d > \$dir/bin/tar && chmod +x \$dir/bin/tar) << END
     $(cat ${pkgs.pkgsStatic.gnutar}/bin/tar | base64)
     END
 
-    export PATH="\$dir/bin/:\$PATH"
+
+    ### select container runtime
+    debug "figuring out which runtime to use"
+    [ -z "\$BWRAP" ] && BWRAP=\$(which bwrap 2>/dev/null) || true
+    [ -z "\$BWRAP" ] && BWRAP=\$dir/bin/bwrap
+    debug "bwrap executable: \$BWRAP"
+    [ -z "\$PROOT" ] && PROOT=\$(which proot 2>/dev/null) || true
+    [ -z "\$PROOT" ] && PROOT=\$dir/bin/proot
+    debug "proot executable: \$PROOT"
+    if [ -z "\$RUNTIME" ]; then
+      if \$BWRAP --bind / / true; then
+        debug "bwrap seems to work on this system -> will use bwrap"
+        RUNTIME=bwrap
+      else
+        debug "bwrap doesn't work on this system -> will use proot"
+        RUNTIME=proot
+      fi
+    fi
+    mkdir -p \$dir/emptyroot
+    binds=\$(ls /)
+    if [ "\$RUNTIME" == "bwrap" ]; then
+      run="\$BWRAP \$BWRAP_ARGS \\
+        --bind / /\\
+        --dev-bind /dev /dev\\
+        --bind \$dir/ /nix\\
+        --bind \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/ /bin"
+      if [ -n "\$SSL_CERT_FILE" ]; then
+        run="\$run --bind \$SSL_CERT_FILE \$SSL_CERT_FILE"
+      fi
+      # for b in \$binds; do
+      #   run="\$run --bind-try /\$b /\$b"
+      # done
+    else
+      run="\$PROOT \$PROOT_ARGS\\
+        -R \$dir/emptyroot
+        -b \$dir/store:/nix/store\\
+        -b \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/:/bin"
+      for b in \$binds; do
+        run="\$run -b /\$b:/\$b"
+      done
+    fi
 
 
     ### generate nix config
     mkdir -p \$dir/conf/
     # echo "" > \$dir/conf/nix.conf
     echo "build-users-group = " > \$dir/conf/nix.conf
-    echo "experimental-features = nix-command" >> \$dir/conf/nix.conf
+    echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
     if (which unshare &>/dev/null && unshare --user --pid true &>/dev/null); then
-      debug using sandbox
+      debug "using sandbox"
       echo "sandbox = false" >> \$dir/conf/nix.conf
     else
       echo "sandbox = false" >> \$dir/conf/nix.conf
@@ -77,16 +143,18 @@ let
 
 
     ### setup environment
-    export PATH="\$HOME/.nix-profile/bin:\$PATH"
+    # export PATH="\$HOME/.nix-profile/bin:\$PATH"
     export NIX_PATH="\$dir/channels:nixpkgs=\$dir/channels/nixpkgs"
     mkdir -p \$dir/channels
-    [ -h \$dir/channels/nixpkgs ] || ln -s ${pkgs.path} \$dir/channels/nixpkgs 
-    [ -e /etc/ssl/certs ] || export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+    [ -h \$dir/channels/nixpkgs ] || ln -s ${pkgs.path} \$dir/channels/nixpkgs
 
 
     ### install nix store
     # This installs all the nix store paths necessary for the current nix-portable version
     # We only unpack missing store paths from the tar archive.
+    # xz must be in PATH
+    PATH_OLD="\$PATH"
+    PATH="\$dir/bin/:\$PATH"
     index="$(cat ${storeTar}/index)"
 
     export missing=\$(
@@ -109,16 +177,20 @@ let
     END
     fi
 
+    PATH="\$PATH_OLD"
+
     if [ -n "\$missing" ]; then
-      debug loading new store paths
+      debug "loading new store paths"
       reg="$(cat ${storeTar}/closureInfo/registration)"
-      echo "\$reg" | \$dir/bin/proot -b \$dir:/nix \$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db 2>/dev/null
+      cmd="\$run \$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
+      debug "running command: \$cmd"
+      echo "\$reg" | \$cmd 2>/dev/null
     fi
 
 
     ### select executable
-    # the executable can either be selected by executing `./nix-portable BIN_NAME`,
-    # or by symlinking to nix-portable, while the name of the symlink selectes the binary
+    # the executable can either be selected by executing './nix-portable BIN_NAME',
+    # or by symlinking to nix-portable, in which case the name of the symlink selectes the binary
     if [ "\$(basename \$0)" == "nix-portable" ]; then
       if [ -z "\$1" ]; then
         echo "Error: please specify the nix binary to execute"
@@ -136,9 +208,18 @@ let
     fi
 
 
-    ### run executable
-    export PROOT_NO_SECCOMP=1
-    \$dir/bin/proot -b \$dir/store:/nix/store \$bin "\$@"
+    ### run commands
+    # add busybox to path
+    # TODO: remvoe and moutn all necessary directories
+    export PATH="$PATH:${pkgs.busybox}/bin"
+    [ -z "\$NP_RUN" ] && NP_RUN="\$run"
+    if [ "\$RUNTIME" == "proot" ]; then
+      \$NP_RUN \$bin "\$@"
+    else
+      cmd="\$NP_RUN \$bin \$@"
+      debug "running command: \$cmd"
+      \$cmd
+    fi
   '';
 
   runtimeScriptEscaped = replaceStrings ["\""] ["\\\""] runtimeScript;
