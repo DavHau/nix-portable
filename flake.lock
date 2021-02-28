@@ -20,15 +20,16 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1612729456,
-        "narHash": "sha256-oF6A3RIUweQ6dWmPJbSUTd0mrv5/gqjpNMDSJ7sZErg=",
+        "lastModified": 1612537053,
+        "narHash": "sha256-3y05uB7OkEtWngIKYx+xiY+oG+1QPvRROJkKBxO1XFc=",
         "owner": "NixOS",
         "repo": "nix",
-        "rev": "fd6eaa17660732c98a000cb92399d04f003654a6",
+        "rev": "480426a364f09e7992230b32f2941a09fb52d729",
         "type": "github"
       },
       "original": {
         "id": "nix",
+        "rev": "480426a364f09e7992230b32f2941a09fb52d729",
         "type": "indirect"
       }
     },
@@ -47,13 +48,29 @@
         "type": "indirect"
       }
     },
-    "nixpkgs_2": {
+    "nixpkgsOld": {
+      "flake": false,
       "locked": {
-        "lastModified": 1612545171,
-        "narHash": "sha256-AZkSuO7H055eDD4KWBEDCX/R5fvw0vUMCErvQvYSEhA=",
+        "lastModified": 1607401265,
+        "narHash": "sha256-WK5qhfe+i78hz6TU728tAlybnBn5FZ0dAcMLsQAeU74=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "536fe36e23ab0fc8b7f35c24603422eee9fc17a2",
+        "rev": "4fe23ed6cae572b295d0595ad4a4b39021a1468a",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "rev": "4fe23ed6cae572b295d0595ad4a4b39021a1468a",
+        "type": "indirect"
+      }
+    },
+    "nixpkgsUnstable": {
+      "locked": {
+        "lastModified": 1614191423,
+        "narHash": "sha256-As8TFDUW6CMCN5zlw5dVnZiwakO1cRKYPk64rsr32uU=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f6b5bfdb470d60a876992749d0d708ed7b6b56ca",
         "type": "github"
       },
       "original": {
@@ -62,11 +79,28 @@
         "type": "indirect"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1614267137,
+        "narHash": "sha256-9XF2tp66RkXjhBs4iqcCYQ2xUdc4r2QAh/yaMHr3lok=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "42809feaa9f7474f5566a5c6e8e317e15e39160e",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "ref": "nixos-20.09",
+        "type": "indirect"
+      }
+    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
         "nix": "nix",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_2",
+        "nixpkgsOld": "nixpkgsOld",
+        "nixpkgsUnstable": "nixpkgsUnstable"
       }
     }
   },
