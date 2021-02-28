@@ -138,7 +138,7 @@ let
         --bind \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/ /bin"
     else
       makeBindArgs -b ":" \$toBind
-      run="\$PROOT \$PROOT_ARGS\\
+      run="\$NP_PROOT \$PROOT_ARGS\\
         -R \$dir/emptyroot
         -b \$dir/store:/nix/store\\
         -b \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/:/bin
