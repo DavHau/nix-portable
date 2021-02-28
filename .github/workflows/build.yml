@@ -3,7 +3,7 @@ name: "Build"
 on:
   pull_request:
   push:
-    branches: ["ci"]
+    branches: [master, ci]
 jobs:
   build:
     runs-on: ubuntu-latest
