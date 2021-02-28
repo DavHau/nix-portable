@@ -77,14 +77,9 @@ let
     ${installBin pkgs.pkgsStatic.gnutar "tar"}
 
 
-    ### gather paths to bind
+    ### gather paths to bind for proot
     paths="\$(find / -mindepth 1 -maxdepth 1 -not -name etc)"
     paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
-    if [ -n "\$SSL_CERT_FILE" ]; then
-      paths="\$paths \$SSL_CERT_FILE \$SSL_CERT_FILE"
-    else
-      paths="\$paths /etc/ssl/certs"
-    fi
     toBind=""
     mkdir -p \$dir/shared-files
     for p in \$paths; do
@@ -133,13 +128,26 @@ let
     mkdir -p \$dir/emptyroot
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
       # makeBindArgs --bind " " \$toBind
+      if [ -n "\$SSL_CERT_FILE" ]; then
+        makeBindArgs --bind " " \$SSL_CERT_FILE \$SSL_CERT_FILE
+      fi
       run="\$NP_BWRAP \$BWRAP_ARGS \\
         --bind / /\\
         --dev-bind /dev /dev\\
         --bind \$dir/ /nix\\
-        --bind \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/ /bin"
+        --bind \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/ /bin\\
+        \$binds"
     else
       makeBindArgs -b ":" \$toBind
+      binds_1="\$binds"
+      if [ -n "\$SSL_CERT_FILE" ]; then
+        debug "creating bind args for \$SSL_CERT_FILE"
+        makeBindArgs -b ":" \$SSL_CERT_FILE \$SSL_CERT_FILE
+      else
+        debug "creating bind args for /etc/ssl"
+        makeBindArgs -b ":" /etc/ssl /etc/ssl
+      fi
+      binds="\$binds_1 \$binds"
       run="\$NP_PROOT \$PROOT_ARGS\\
         -R \$dir/emptyroot
         -b \$dir/store:/nix/store\\
