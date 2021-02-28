@@ -1,15 +1,15 @@
 with builtins;
 {
   pkgs ? import <nixpkgs> {},
-  pkgsOverlayed ? import <nixpkgs> {},
-  nix ? (builtins.getFlake "nix/480426a364f09e7992230b32f2941a09fb52d729").packages.x86_64-linux.nix-static,
+  pkgsBwrapStatic ? import <nixpkgs> {},
+  nix,
   tb,
   ...
 }:
 let
+  # the static proot built with nix somehow didn;t work on other systems,
+  # therefore downloading the proot static build from their gitlab
   proot = import ./proot/gitlab.nix { inherit pkgs; };
-
-  bwrap = pkgsOverlayed.pkgsStatic.bubblewrap;
 
   maketar = targets:
     pkgs.stdenv.mkDerivation {
@@ -29,11 +29,12 @@ let
       '';
     };
 
+  # the default nix store contents to extract when first used
   storeTar = maketar (with pkgs; [ busybox cacert nix path gnutar gzip ]);
 
 
   # The runtime script which unpacks the necessary files to $HOME/.nix-portable
-  # and then executes nix via proot
+  # and then executes nix via proot or bwrap
   # Some shell expressions will be evaluated at build time and some at run time.
   # Variables/expressions escaped via `\$` will be evaluated at run time
   runtimeScript = ''
@@ -42,7 +43,7 @@ let
     set -e
 
     debug(){
-      [ -n "\$NIX_PORTABLE_DEBUG" ] && echo \$@
+      [ -n "\$NIX_PORTABLE_DEBUG" ] && echo \$@ || true
     }
       
     dir=\$HOME/.nix-portable
@@ -86,6 +87,37 @@ let
     END
 
 
+    ### gather paths to bind
+    paths="\$(find / -mindepth 1 -maxdepth 1 -not -name etc)"
+    paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
+    if [ -n "\$SSL_CERT_FILE" ]; then
+      paths="\$paths \$SSL_CERT_FILE \$SSL_CERT_FILE"
+    fi
+    toBind=""
+    mkdir -p \$dir/shared-files
+    for p in \$paths; do
+      if [ -e "\$p" ]; then
+        real=\$(realpath \$p)
+        [ -e "\$real" ] && toBind="\$toBind \$real \$p"
+      fi
+    done
+
+    makeBindArgs(){
+      arg=\$1; shift
+      sep=\$1; shift
+      binds=""
+      while :; do
+        if [ -n "\$1" ]; then
+          from="\$1"; shift
+          to="\$1"; shift
+          binds="\$binds \$arg \$from\$sep\$to";
+        else
+          break
+        fi
+      done
+    }
+
+
     ### select container runtime
     debug "figuring out which runtime to use"
     [ -z "\$BWRAP" ] && BWRAP=\$(which bwrap 2>/dev/null) || true
@@ -95,55 +127,45 @@ let
     [ -z "\$PROOT" ] && PROOT=\$dir/bin/proot
     debug "proot executable: \$PROOT"
     if [ -z "\$RUNTIME" ]; then
-      if \$BWRAP --bind / / true; then
+      # check if bwrap works properly
+      if \$BWRAP --bind / / --bind ${pkgs.busybox}/bin/busybox \$HOME/testxyz/true \$HOME/testxyz/true 2>/dev/null; then
         debug "bwrap seems to work on this system -> will use bwrap"
         RUNTIME=bwrap
       else
         debug "bwrap doesn't work on this system -> will use proot"
         RUNTIME=proot
       fi
+    else
+      debug "runtime selected via RUNTIME : \$RUNTIME"
     fi
     mkdir -p \$dir/emptyroot
-    binds=\$(ls /)
     if [ "\$RUNTIME" == "bwrap" ]; then
+      # makeBindArgs --bind " " \$toBind
       run="\$BWRAP \$BWRAP_ARGS \\
         --bind / /\\
         --dev-bind /dev /dev\\
         --bind \$dir/ /nix\\
         --bind \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/ /bin"
-      if [ -n "\$SSL_CERT_FILE" ]; then
-        run="\$run --bind \$SSL_CERT_FILE \$SSL_CERT_FILE"
-      fi
-      # for b in \$binds; do
-      #   run="\$run --bind-try /\$b /\$b"
-      # done
     else
+      makeBindArgs -b ":" \$toBind
       run="\$PROOT \$PROOT_ARGS\\
         -R \$dir/emptyroot
         -b \$dir/store:/nix/store\\
-        -b \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/:/bin"
-      for b in \$binds; do
-        run="\$run -b /\$b:/\$b"
-      done
+        -b \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/:/bin
+        \$binds"
     fi
 
 
     ### generate nix config
     mkdir -p \$dir/conf/
-    # echo "" > \$dir/conf/nix.conf
     echo "build-users-group = " > \$dir/conf/nix.conf
     echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
-    if (which unshare &>/dev/null && unshare --user --pid true &>/dev/null); then
-      debug "using sandbox"
-      echo "sandbox = false" >> \$dir/conf/nix.conf
-    else
-      echo "sandbox = false" >> \$dir/conf/nix.conf
-    fi
+    echo "sandbox = true" >> \$dir/conf/nix.conf
+    echo "sandbox-fallback = true" >> \$dir/conf/nix.conf
     export NIX_CONF_DIR=\$dir/conf/
 
 
     ### setup environment
-    # export PATH="\$HOME/.nix-profile/bin:\$PATH"
     export NIX_PATH="\$dir/channels:nixpkgs=\$dir/channels/nixpkgs"
     mkdir -p \$dir/channels
     [ -h \$dir/channels/nixpkgs ] || ln -s ${pkgs.path} \$dir/channels/nixpkgs
@@ -210,10 +232,11 @@ let
 
     ### run commands
     # add busybox to path
-    # TODO: remvoe and moutn all necessary directories
+    # TODO: remove and mount all necessary directories
     export PATH="$PATH:${pkgs.busybox}/bin"
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
     if [ "\$RUNTIME" == "proot" ]; then
+      debug "running command: \$NP_RUN \$bin \$@"
       \$NP_RUN \$bin "\$@"
     else
       cmd="\$NP_RUN \$bin \$@"
