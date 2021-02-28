@@ -1,15 +1,14 @@
 with builtins;
 {
-  pkgs ? import <nixpkgs> {},
-  pkgsBwrapStatic ? import <nixpkgs> {},
+  bwrap,
   nix,
-  tb,
+  pkgs ? import <nixpkgs> {},
+  proot,
   ...
 }:
 let
-  # the static proot built with nix somehow didn;t work on other systems,
-  # therefore downloading the proot static build from their gitlab
-  proot = import ./proot/gitlab.nix { inherit pkgs; };
+
+  zstd = pkgs.pkgsStatic.zstd;
 
   maketar = targets:
     pkgs.stdenv.mkDerivation {
@@ -29,6 +28,12 @@ let
       '';
     };
 
+  installBin = pkg: bin: ''
+    (base64 -d> \$dir/bin/${bin} && chmod +x \$dir/bin/${bin}) << END
+    $(cat ${pkg}/bin/${bin} | base64)
+    END
+  '';
+
   # the default nix store contents to extract when first used
   storeTar = maketar (with pkgs; [ busybox cacert nix path gnutar gzip ]);
 
@@ -43,7 +48,7 @@ let
     set -e
 
     debug(){
-      [ -n "\$NIX_PORTABLE_DEBUG" ] && echo \$@ || true
+      [ -n "\$NP_DEBUG" ] && echo \$@ || true
     }
       
     dir=\$HOME/.nix-portable
@@ -65,26 +70,11 @@ let
     fi
 
 
-    ### install proot
-    (base64 -d > \$dir/bin/proot && chmod +x \$dir/bin/proot) << END
-    $(cat ${proot}/bin/proot | base64)
-    END
-
-
-    ### install bwrap
-    (base64 -d > \$dir/bin/bwrap && chmod +x \$dir/bin/bwrap) << END
-    $(cat ${bwrap}/bin/bwrap | base64)
-    END
-
-
-    ### install xz and tar
-    (base64 -d > \$dir/bin/xz && chmod +x \$dir/bin/xz) << END
-    $(cat ${pkgs.pkgsStatic.xz}/bin/xz | base64)
-    END
-
-    (base64 -d > \$dir/bin/tar && chmod +x \$dir/bin/tar) << END
-    $(cat ${pkgs.pkgsStatic.gnutar}/bin/tar | base64)
-    END
+    ### install binaries
+    ${installBin proot "proot"}
+    ${installBin bwrap "bwrap"}
+    ${installBin pkgs.pkgsStatic.xz "xz"}
+    ${installBin pkgs.pkgsStatic.gnutar "tar"}
 
 
     ### gather paths to bind
@@ -120,28 +110,28 @@ let
 
     ### select container runtime
     debug "figuring out which runtime to use"
-    [ -z "\$BWRAP" ] && BWRAP=\$(which bwrap 2>/dev/null) || true
-    [ -z "\$BWRAP" ] && BWRAP=\$dir/bin/bwrap
-    debug "bwrap executable: \$BWRAP"
-    [ -z "\$PROOT" ] && PROOT=\$(which proot 2>/dev/null) || true
-    [ -z "\$PROOT" ] && PROOT=\$dir/bin/proot
-    debug "proot executable: \$PROOT"
-    if [ -z "\$RUNTIME" ]; then
+    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(which bwrap 2>/dev/null) || true
+    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$dir/bin/bwrap
+    debug "bwrap executable: \$NP_BWRAP"
+    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(which proot 2>/dev/null) || true
+    [ -z "\$NP_PROOT" ] && NP_PROOT=\$dir/bin/proot
+    debug "proot executable: \$NP_PROOT"
+    if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$BWRAP --bind / / --bind ${pkgs.busybox}/bin/busybox \$HOME/testxyz/true \$HOME/testxyz/true 2>/dev/null; then
+      if \$NP_BWRAP --bind / / --bind ${pkgs.busybox}/bin/busybox \$HOME/testxyz/true \$HOME/testxyz/true 2>/dev/null; then
         debug "bwrap seems to work on this system -> will use bwrap"
-        RUNTIME=bwrap
+        NP_RUNTIME=bwrap
       else
         debug "bwrap doesn't work on this system -> will use proot"
-        RUNTIME=proot
+        NP_RUNTIME=proot
       fi
     else
-      debug "runtime selected via RUNTIME : \$RUNTIME"
+      debug "runtime selected via NP_RUNTIME : \$NP_RUNTIME"
     fi
     mkdir -p \$dir/emptyroot
-    if [ "\$RUNTIME" == "bwrap" ]; then
+    if [ "\$NP_RUNTIME" == "bwrap" ]; then
       # makeBindArgs --bind " " \$toBind
-      run="\$BWRAP \$BWRAP_ARGS \\
+      run="\$NP_BWRAP \$BWRAP_ARGS \\
         --bind / /\\
         --dev-bind /dev /dev\\
         --bind \$dir/ /nix\\
@@ -172,7 +162,7 @@ let
 
 
     ### install nix store
-    # This installs all the nix store paths necessary for the current nix-portable version
+    # Install all the nix store paths necessary for the current nix-portable version
     # We only unpack missing store paths from the tar archive.
     # xz must be in PATH
     PATH_OLD="\$PATH"
@@ -231,11 +221,8 @@ let
 
 
     ### run commands
-    # add busybox to path
-    # TODO: remove and mount all necessary directories
-    export PATH="$PATH:${pkgs.busybox}/bin"
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
-    if [ "\$RUNTIME" == "proot" ]; then
+    if [ "\$NP_RUNTIME" == "proot" ]; then
       debug "running command: \$NP_RUN \$bin \$@"
       \$NP_RUN \$bin "\$@"
     else

@@ -94,47 +94,13 @@
         "type": "indirect"
       }
     },
-    "nixpkgs_3": {
-      "locked": {
-        "lastModified": 1614191423,
-        "narHash": "sha256-As8TFDUW6CMCN5zlw5dVnZiwakO1cRKYPk64rsr32uU=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "f6b5bfdb470d60a876992749d0d708ed7b6b56ca",
-        "type": "github"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "ref": "nixos-unstable",
-        "type": "indirect"
-      }
-    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
         "nix": "nix",
         "nixpkgs": "nixpkgs_2",
         "nixpkgsOld": "nixpkgsOld",
-        "nixpkgsUnstable": "nixpkgsUnstable",
-        "tb": "tb"
-      }
-    },
-    "tb": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_3"
-      },
-      "locked": {
-        "lastModified": 1614311767,
-        "narHash": "sha256-W4uR8Ex/ep2rIZXw4zjTzruqjUHsttVMdKx6wtYzEfo=",
-        "owner": "DavHau",
-        "repo": "nix-toolbox",
-        "rev": "da2ca8dea7fae019ca6daaa8c00958c161748520",
-        "type": "github"
-      },
-      "original": {
-        "owner": "DavHau",
-        "repo": "nix-toolbox",
-        "type": "github"
+        "nixpkgsUnstable": "nixpkgsUnstable"
       }
     }
   },
