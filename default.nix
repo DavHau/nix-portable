@@ -82,6 +82,8 @@ let
     paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
     if [ -n "\$SSL_CERT_FILE" ]; then
       paths="\$paths \$SSL_CERT_FILE \$SSL_CERT_FILE"
+    else
+      paths="\$paths /etc/ssl/certs"
     fi
     toBind=""
     mkdir -p \$dir/shared-files
