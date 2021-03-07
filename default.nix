@@ -1,6 +1,7 @@
 with builtins;
 {
   bwrap,
+  compression ? "xz -1 -T $(nproc)",
   nix,
   pkgs ? import <nixpkgs> {},
   proot,
@@ -24,7 +25,7 @@ let
         tar -cf - \
           --owner=0 --group=0 --mode=u+rw,uga+r \
           --hard-dereference \
-          $storePaths | xz -1 -T $(nproc) > $out/tar
+          $storePaths | ${compression} > $out/tar
       '';
     };
 
@@ -35,7 +36,7 @@ let
   '';
 
   # the default nix store contents to extract when first used
-  storeTar = maketar (with pkgs; [ busybox cacert nix path gnutar gzip ]);
+  storeTar = maketar ([ nix ] ++ (with pkgs; [ busybox cacert path ]));
 
 
   # The runtime script which unpacks the necessary files to $HOME/.nix-portable
@@ -210,6 +211,15 @@ let
     fi
 
 
+    ### install git via nix, if git not installed yet
+    if [ ! -e \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.git.out} ] && [ -z "\$NP_MINIMAL" ] ; then
+      echo "Installing git. Disable this by setting 'NP_MINIMAL=1'"
+      \$run \$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
+        (import ${pkgs.path} {}).git.out
+      "
+    fi
+
+
     ### select executable
     # the executable can either be selected by executing './nix-portable BIN_NAME',
     # or by symlinking to nix-portable, in which case the name of the symlink selectes the binary
@@ -228,6 +238,12 @@ let
     else
       bin="\$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/\$(basename \$0)"
     fi
+
+
+    ### set PATH
+    # make available: git, gzip, tar, xz
+    export PATH="\$PATH:${pkgs.busybox}/bin"
+    [ -z "\$NP_MINIMAL" ] && export PATH="\$PATH:${pkgs.git.out}/bin"
 
 
     ### run commands

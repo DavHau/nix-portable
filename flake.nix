@@ -4,7 +4,6 @@
     nixpkgsUnstable.url = "nixpkgs/nixos-unstable";
     nixpkgsOld.url = "nixpkgs/4fe23ed6cae572b295d0595ad4a4b39021a1468a";
     nixpkgsOld.flake = false;
-    nix.url = "nix/480426a364f09e7992230b32f2941a09fb52d729";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -40,7 +39,7 @@
         pkgsUnstable = inp.nixpkgsUnstable.legacyPackages."${system}";
       in
         import ./default.nix rec {
-          nix = inp.nix.defaultPackage."${system}";
+          nix = inp.nixpkgs.legacyPackages."${system}".nixFlakes;
           
           # nix = (import inp.nixpkgsOld { inherit (pkgs) system; }).nix ;
           pkgs = inp.nixpkgs.legacyPackages."${system}";
