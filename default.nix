@@ -211,12 +211,20 @@ let
     fi
 
 
-    ### install git via nix, if git not installed yet
-    if [ ! -e \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.git.out} ] && [ -z "\$NP_MINIMAL" ] ; then
+    ### install git via nix, if git not installed yet or git installation is in /nix path
+    if [ -z "\$NP_MINIMAL" ] && ( ! which git &>/dev/null || [[ "\$(realpath \$(which git))" == /nix/* ]] ); then
+      needGit=true
+    else
+      needGit=false
+    fi
+    debug "needGit: \$needGit"
+    if \$needGit && [ ! -e \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.git.out} ] ; then
       echo "Installing git. Disable this by setting 'NP_MINIMAL=1'"
       \$run \$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
         (import ${pkgs.path} {}).git.out
       "
+    else
+      debug "git already installed or not required"
     fi
 
 
@@ -243,7 +251,7 @@ let
     ### set PATH
     # make available: git, gzip, tar, xz
     export PATH="\$PATH:${pkgs.busybox}/bin"
-    [ -z "\$NP_MINIMAL" ] && export PATH="\$PATH:${pkgs.git.out}/bin"
+    \$needGit && export PATH="\$PATH:${pkgs.git.out}/bin"
 
 
     ### run commands
