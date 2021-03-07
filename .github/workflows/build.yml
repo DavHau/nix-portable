@@ -22,7 +22,7 @@ jobs:
     
     - uses: cachix/cachix-action@v8
       with:
-        name: davhau
+        name: nix-portable
         # If you chose API tokens for write access OR if you have a private cache
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     
