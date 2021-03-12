@@ -51,8 +51,9 @@ let
     debug(){
       [ -n "\$NP_DEBUG" ] && echo \$@ || true
     }
-      
-    dir=\$HOME/.nix-portable
+
+    [ -z "\$NP_LOCATION" ] && NP_LOCATION="\$HOME"
+    dir="\$NP_LOCATION/.nix-portable"
     mkdir -p \$dir/bin
 
 
@@ -67,6 +68,8 @@ let
       elif [ ! -e /etc/ssl/certs ]; then
         debug "/etc/ssl/certs does not exist, using certs from nixpkgs"
         export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+      else
+        debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
       fi
     fi
 

@@ -68,13 +68,14 @@ In case the automatically selected runtime doesn't work, use the follwing enviro
 ### Environmant Variables
 The following environment variables are optional and can be used to override the default behaviour of running nix-portable
 ```
-NP_DEBUG    enable debug logging (to stdout)
-NP_MINIMAL  Do not automatically install git
-NP_RUNTIME  which runtime to use (must be either 'bwrap' or 'proot') 
-NP_BWRAP    specify the path to the bwrap executable
-NP_PROOT    specify the path to the proot executable
-NP_RUN      override the complete command to run nix
-            (to use an unsupported runtime, or for debugging)
-            nix will then be executed like: $NP_RUN {nix-binary} {args...}
+NP_DEBUG      enable debug logging (to stdout)
+NP_MINIMAL    do not automatically install git
+NP_LOCATION   where to put the `.nix-portable` dir. (defaults to `$HOME`)
+NP_RUNTIME    which runtime to use (must be either 'bwrap' or 'proot') 
+NP_BWRAP      specify the path to the bwrap executable
+NP_PROOT      specify the path to the proot executable
+NP_RUN        override the complete command to run nix
+              (to use an unsupported runtime, or for debugging)
+              nix will then be executed like: $NP_RUN {nix-binary} {args...}
           
 ```
