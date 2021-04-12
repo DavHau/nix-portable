@@ -41,7 +41,9 @@
             # frankensteined static bubblewrap
             bwrap = pkgsBwrapStatic.pkgsStatic.bwrap;
 
-            nix = pkgsCached.nixFlakes;
+            nix = pkgsCached.nixFlakes.overrideAttrs (_:{
+              patches = [ ./nix-nfs.patch ];
+            });
 
             # the static proot built with nix somehow didn't work on other systems,
             # therefore using the proot static build from proot gitlab
