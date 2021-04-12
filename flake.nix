@@ -7,52 +7,69 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, ... }@inp: inp.flake-utils.lib.eachDefaultSystem (system: rec {
+  outputs = { self, ... }@inp: 
+    with inp.nixpkgs.lib;
+    let
+    
+      nixPortableForSystem = { system, crossSystem ? null,  }:
+        let
+          # libcap static is broken on recent nixpkgs,
+          # therefore basing bwrap static off of older nixpkgs
+          # bwrap with musl requires a recent fix in musl, see:
+          # https://github.com/flathub/org.signal.Signal/issues/129
+          # https://github.com/containers/bubblewrap/issues/387
+          pkgsBwrapStatic = import inp.nixpkgsOld {
+            inherit system crossSystem;
+            overlays = [(curr: prev: {
+              musl = pkgsUnstableCached.musl;
+              bwrap = pkgsBwrapStatic.pkgsStatic.bubblewrap.overrideAttrs (_:{
+                # TODO: enable priv mode setuid to improve compatibility
+                configureFlags = _.configureFlags ++ [
+                  # "--with-priv-mode=setuid"
+                ];
+              });
+            })];
+          };
+          pkgs = import inp.nixpkgs { inherit system crossSystem; };
+          pkgsCached = if crossSystem == null then pkgs else import inp.nixpkgs { system = crossSystem; };
+          pkgsUnstableCached = if crossSystem == null then pkgs else import inp.nixpkgsUnstable { system = crossSystem; };
+        in
+          pkgs.callPackage ./default.nix rec {
 
-    packages.nix-portable = 
-      let
-        # libcap static is broken on recent nixpkgs,
-        # therefore basing bwrap static off of older nixpkgs
-        # bwrap with musl requires a recent fix in musl, see:
-        # https://github.com/flathub/org.signal.Signal/issues/129
-        # https://github.com/containers/bubblewrap/issues/387
-        pkgsBwrapStatic = import inp.nixpkgsOld {
-          inherit system;
-          overlays = [(curr: prev: {
-            musl = pkgsUnstable.musl.overrideAttrs (_:{
-              version = "1.2.2";
-              src = builtins.fetchTarball {
-                url = "https://www.musl-libc.org/releases/musl-1.2.2.tar.gz";
-                sha256 = "0c1mbadligmi02r180l0qx4ixwrf372zl5mivb1axmjgpd612ylp";
-              };
-              # CVE-2020-28928 already fixed in this version
-              patches = builtins.filter (p: ! inp.nixpkgs.lib.hasSuffix "CVE-2020-28928.patch" "${p}" ) _.patches;
-            });
-            bwrap = pkgsBwrapStatic.pkgsStatic.bubblewrap.overrideAttrs (_:{
-              # TODO: enable priv mode setuid to improve compatibility
-              configureFlags = _.configureFlags ++ [
-                # "--with-priv-mode=setuid"
-              ];
-            });
-          })];
-        };
-        pkgsUnstable = inp.nixpkgsUnstable.legacyPackages."${system}";
-      in
-        import ./default.nix rec {
-          nix = inp.nixpkgs.legacyPackages."${system}".nixFlakes;
-          
-          # nix = (import inp.nixpkgsOld { inherit (pkgs) system; }).nix ;
-          pkgs = inp.nixpkgs.legacyPackages."${system}";
+            inherit pkgs;
 
-          # frankensteined static bubblewrap
-          bwrap = pkgsBwrapStatic.pkgsStatic.bwrap;
+            # frankensteined static bubblewrap
+            bwrap = pkgsBwrapStatic.pkgsStatic.bwrap;
 
-          # the static proot built with nix somehow didn't work on other systems,
-          # therefore using the proot static build from proot gitlab
-          proot = import ./proot/gitlab.nix { inherit pkgs; };
-        };
+            nix = pkgsCached.nixFlakes;
 
-    defaultPackage = packages.nix-portable;
+            # the static proot built with nix somehow didn't work on other systems,
+            # therefore using the proot static build from proot gitlab
+            proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/gitlab.nix { inherit pkgs; };
 
-  });
+            busybox = pkgsCached.busybox;
+            compression = "xz -1 -T $(nproc)";
+            gnutar = pkgs.pkgsStatic.gnutar;
+            lib = inp.nixpkgs.lib;
+            mkDerivation = pkgs.stdenv.mkDerivation;
+            nixpkgsSrc = pkgs.path;
+            perl = pkgs.pkgsBuildBuild.perl;
+            xz = pkgs.pkgsStatic.xz;
+            zstd = pkgs.pkgsStatic.zstd;
+          };
+
+  in
+    recursiveUpdate
+      (inp.flake-utils.lib.eachDefaultSystem (system: rec {
+        packages.nix-portable = nixPortableForSystem { inherit system; };
+        defaultPackage = packages.nix-portable;
+      }))
+      { packages = (genAttrs [ "x86_64-linux" ] (system:
+          (listToAttrs (map (crossSystem: 
+            nameValuePair "nix-portable-${crossSystem}" (nixPortableForSystem { inherit crossSystem system; } )
+          ) [ "aarch64-linux" ]))
+        ));
+      };
+
+      
 }

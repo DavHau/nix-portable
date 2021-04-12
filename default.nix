@@ -1,20 +1,29 @@
 with builtins;
 {
   bwrap,
-  compression ? "xz -1 -T $(nproc)",
   nix,
-  pkgs ? import <nixpkgs> {},
   proot,
+
+  busybox ? pkgs.busybox,
+  cacert ? pkgs.cacert,
+  compression ? "xz -1 -T $(nproc)",
+  git ? pkgs.git,
+  gnutar ? pkgs.pkgsStatic.gnutar,
+  lib ? pkgs.lib,
+  mkDerivation ? pkgs.stdenv.mkDerivation,
+  nixpkgsSrc ? pkgs.path,
+  perl ? pkgs.perl,
+  pkgs ? import <nixpkgs> {},
+  xz ? pkgs.pkgsStatic.xz,
+  zstd ? pkgs.pkgsStatic.zstd,
   ...
 }:
 let
 
-  zstd = pkgs.pkgsStatic.zstd;
-
   maketar = targets:
-    pkgs.stdenv.mkDerivation {
+    mkDerivation {
       name = "maketar";
-      buildInputs = with pkgs; [ perl ];
+      nativeBuildInputs = [ perl ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
       buildCommand = ''
         storePaths=$(perl ${pkgs.pathsFromGraph} ./closure-*)
@@ -36,7 +45,7 @@ let
   '';
 
   # the default nix store contents to extract when first used
-  storeTar = maketar ([ nix ] ++ (with pkgs; [ busybox cacert path ]));
+  storeTar = maketar ([ nix ] ++ [ busybox cacert nixpkgsSrc ]);
 
 
   # The runtime script which unpacks the necessary files to $HOME/.nix-portable
@@ -67,7 +76,7 @@ let
         export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
       elif [ ! -e /etc/ssl/certs ]; then
         debug "/etc/ssl/certs does not exist, using certs from nixpkgs"
-        export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+        export SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt
       else
         debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
       fi
@@ -77,8 +86,8 @@ let
     ### install binaries
     ${installBin proot "proot"}
     ${installBin bwrap "bwrap"}
-    ${installBin pkgs.pkgsStatic.xz "xz"}
-    ${installBin pkgs.pkgsStatic.gnutar "tar"}
+    ${installBin xz "xz"}
+    ${installBin gnutar "tar"}
 
 
     ### gather paths to bind for proot
@@ -119,7 +128,7 @@ let
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$NP_BWRAP --bind / / --bind ${pkgs.busybox}/bin/busybox \$HOME/testxyz/true \$HOME/testxyz/true 2>/dev/null; then
+      if \$NP_BWRAP --bind / / --bind ${busybox}/bin/busybox \$HOME/testxyz/true \$HOME/testxyz/true 2>/dev/null; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -139,7 +148,7 @@ let
         --bind / /\\
         --dev-bind /dev /dev\\
         --bind \$dir/ /nix\\
-        --bind \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/ /bin\\
+        --bind \$dir/store${lib.removePrefix "/nix/store" busybox}/bin/ /bin\\
         \$binds"
     else
       makeBindArgs -b ":" \$toBind
@@ -155,7 +164,7 @@ let
       run="\$NP_PROOT \$PROOT_ARGS\\
         -R \$dir/emptyroot
         -b \$dir/store:/nix/store\\
-        -b \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.busybox}/bin/:/bin
+        -b \$dir/store${lib.removePrefix "/nix/store" busybox}/bin/:/bin
         \$binds"
     fi
 
@@ -172,7 +181,7 @@ let
     ### setup environment
     export NIX_PATH="\$dir/channels:nixpkgs=\$dir/channels/nixpkgs"
     mkdir -p \$dir/channels
-    [ -h \$dir/channels/nixpkgs ] || ln -s ${pkgs.path} \$dir/channels/nixpkgs
+    [ -h \$dir/channels/nixpkgs ] || ln -s ${nixpkgsSrc} \$dir/channels/nixpkgs
 
 
     ### install nix store
@@ -208,7 +217,7 @@ let
     if [ -n "\$missing" ]; then
       debug "loading new store paths"
       reg="$(cat ${storeTar}/closureInfo/registration)"
-      cmd="\$run \$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
+      cmd="\$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
       debug "running command: \$cmd"
       echo "\$reg" | \$cmd 2>/dev/null
     fi
@@ -221,10 +230,10 @@ let
       needGit=false
     fi
     debug "needGit: \$needGit"
-    if \$needGit && [ ! -e \$dir/store${pkgs.lib.removePrefix "/nix/store" pkgs.git.out} ] ; then
+    if \$needGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
       echo "Installing git. Disable this by setting 'NP_MINIMAL=1'"
-      \$run \$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
-        (import ${pkgs.path} {}).git.out
+      \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
+        (import ${nixpkgsSrc} {}).git.out
       "
     else
       debug "git already installed or not required"
@@ -243,18 +252,18 @@ let
         bin="\$(which \$2)"
         shift; shift
       else
-        bin="\$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/\$1"
+        bin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/\$1"
         shift
       fi
     else
-      bin="\$dir/store${pkgs.lib.removePrefix "/nix/store" nix}/bin/\$(basename \$0)"
+      bin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/\$(basename \$0)"
     fi
 
 
     ### set PATH
     # make available: git, gzip, tar, xz
-    export PATH="\$PATH:${pkgs.busybox}/bin"
-    \$needGit && export PATH="\$PATH:${pkgs.git.out}/bin"
+    export PATH="\$PATH:${busybox}/bin"
+    \$needGit && export PATH="\$PATH:${git.out}/bin"
 
 
     ### run commands
