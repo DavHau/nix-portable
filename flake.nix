@@ -13,41 +13,24 @@
     
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
-          # libcap static is broken on recent nixpkgs,
-          # therefore basing bwrap static off of older nixpkgs
-          # bwrap with musl requires a recent fix in musl, see:
-          # https://github.com/flathub/org.signal.Signal/issues/129
-          # https://github.com/containers/bubblewrap/issues/387
-          pkgsBwrapStatic = import inp.nixpkgsOld {
-            inherit system crossSystem;
-            overlays = [(curr: prev: {
-              musl = pkgsUnstableCached.musl;
-              bwrap = pkgsBwrapStatic.pkgsStatic.bubblewrap.overrideAttrs (_:{
-                # TODO: enable priv mode setuid to improve compatibility
-                configureFlags = _.configureFlags ++ [
-                  # "--with-priv-mode=setuid"
-                ];
-              });
-            })];
-          };
           pkgs = import inp.nixpkgs { inherit system crossSystem; };
+          pkgsUnstable = import inp.nixpkgsUnstable { inherit system crossSystem; };
           pkgsCached = if crossSystem == null then pkgs else import inp.nixpkgs { system = crossSystem; };
           pkgsUnstableCached = if crossSystem == null then pkgs else import inp.nixpkgsUnstable { system = crossSystem; };
+          
+          # the static proot built with nix somehow didn't work on other systems,
+          # therefore using the proot static build from proot gitlab
+          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/gitlab.nix { inherit pkgs; };
         in
           pkgs.callPackage ./default.nix rec {
 
-            inherit pkgs;
+            inherit pkgs proot;
 
-            # frankensteined static bubblewrap
-            bwrap = pkgsBwrapStatic.pkgsStatic.bwrap;
+            bwrap = pkgsUnstable.pkgsStatic.bubblewrap;
 
-            nix = pkgsCached.nixFlakes.overrideAttrs (_:{
-              patches = [ ./nix-nfs.patch ];
+            nix = pkgs.nixFlakes.overrideAttrs (_:{
+              patches = (_.patches or []) ++ [ ./nix-nfs.patch ];
             });
-
-            # the static proot built with nix somehow didn't work on other systems,
-            # therefore using the proot static build from proot gitlab
-            proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/gitlab.nix { inherit pkgs; };
 
             busybox = pkgsCached.busybox;
             compression = "xz -1 -T $(nproc)";
@@ -57,7 +40,6 @@
             nixpkgsSrc = pkgs.path;
             perl = pkgs.pkgsBuildBuild.perl;
             xz = pkgs.pkgsStatic.xz;
-            zstd = pkgs.pkgsStatic.zstd;
           };
 
   in

@@ -15,7 +15,6 @@ with builtins;
   perl ? pkgs.perl,
   pkgs ? import <nixpkgs> {},
   xz ? pkgs.pkgsStatic.xz,
-  zstd ? pkgs.pkgsStatic.zstd,
   ...
 }:
 let
