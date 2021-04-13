@@ -174,6 +174,7 @@ let
     echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
     echo "sandbox = true" >> \$dir/conf/nix.conf
     echo "sandbox-fallback = true" >> \$dir/conf/nix.conf
+    echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
     export NIX_CONF_DIR=\$dir/conf/
 
 
