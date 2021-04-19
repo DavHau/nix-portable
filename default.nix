@@ -3,6 +3,9 @@ with builtins;
   bwrap,
   nix,
   proot,
+  unzip,
+  zip,
+  unixtools,
 
   busybox ? pkgs.busybox,
   cacert ? pkgs.cacert,
@@ -38,6 +41,10 @@ let
     };
 
   installBin = pkg: bin: ''
+    unzip -qqoj "\''${BASH_SOURCE[0]}" ${ lib.removePrefix "/" "${pkg}/bin/${bin}"} -d \$dir/bin
+    chmod +x \$dir/bin/${bin} # ;
+  '';
+  installBin2 = pkg: bin: ''
     (base64 -d> \$dir/bin/${bin} && chmod +x \$dir/bin/${bin}) << END
     $(cat ${pkg}/bin/${bin} | base64)
     END
@@ -201,15 +208,12 @@ let
     )
 
     if [ -n "\$missing" ]; then
-      (
         mkdir -p \$dir/tmp \$dir/store/
         rm -rf \$dir/tmp/*
         cd \$dir/tmp
-        base64 -d | tar -xJ \$missing --strip-components 2
+        unzip -qqp "\''${BASH_SOURCE[0]}" ${ lib.removePrefix "/" "${storeTar}/tar"} \
+         | tar -xJ \$missing --strip-components 2
         mv \$dir/tmp/* \$dir/store/
-      ) << END
-    $(cat ${storeTar}/tar | base64)
-    END
     fi
 
     PATH="\$PATH_OLD"
@@ -270,19 +274,41 @@ let
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
     if [ "\$NP_RUNTIME" == "proot" ]; then
       debug "running command: \$NP_RUN \$bin \$@"
-      \$NP_RUN \$bin "\$@"
+      exec  \$NP_RUN \$bin "\$@"
     else
       cmd="\$NP_RUN \$bin \$@"
       debug "running command: \$cmd"
-      \$cmd
+      exec  \$cmd
     fi
   '';
 
   runtimeScriptEscaped = replaceStrings ["\""] ["\\\""] runtimeScript;
 
-  nixPortable = pkgs.runCommand "nix-portable" {} ''
+  nixPortable = pkgs.runCommand "nix-portable" {nativeBuildInputs = [unixtools.xxd unzip];} ''
     mkdir -p $out/bin
-    echo "${runtimeScriptEscaped}" > $out/bin/nix-portable
+    echo "${runtimeScriptEscaped}" > $out/bin/nix-portable.zip
+    xxd $out/bin/nix-portable.zip | tail
+
+    sizeA=$(printf "%08x" `stat -c "%s" $out/bin/nix-portable.zip` | tac -rs ..)
+    echo 504b 0304 0000 0000 0000 0000 0000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+    echo 0000 0000 0000 0000 0000 0200 0000 4242 | xxd -r -p >> $out/bin/nix-portable.zip
+
+    sizeB=$(printf "%08x" `stat -c "%s" $out/bin/nix-portable.zip` | tac -rs ..)
+    echo 504b 0102 0000 0000 0000 0000 0000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+    echo 0000 0000 0000 0000 0000 0000 0200 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+    echo 0000 0000 0000 0000 0000 $sizeA 4242 | xxd -r -p >> $out/bin/nix-portable.zip
+
+    echo 504b 0506 0000 0000 0000 0100 3000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+    echo $sizeB 0000 0000 0000 0000 0000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+
+    unzip -vl $out/bin/nix-portable.zip
+
+    ${zip}/bin/zip $out/bin/nix-portable.zip ${proot}/bin/proot
+    ${zip}/bin/zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
+    ${zip}/bin/zip $out/bin/nix-portable.zip ${xz}/bin/xz
+    ${zip}/bin/zip $out/bin/nix-portable.zip ${gnutar}/bin/tar
+    ${zip}/bin/zip $out/bin/nix-portable.zip ${storeTar}/tar
+    mv $out/bin/nix-portable.zip $out/bin/nix-portable
     chmod +x $out/bin/nix-portable
   '';
 in
