@@ -127,7 +127,7 @@ let
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$NP_BWRAP --bind / / --bind ${busybox}/bin/busybox \$HOME/testxyz/true \$HOME/testxyz/true 2>/dev/null; then
+      if \$NP_BWRAP --bind / / --bind \$dir/store /nix/store ${busybox}/bin/busybox true 2>/dev/null; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
