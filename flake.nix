@@ -119,7 +119,7 @@
 
                 echo -e "\n\nstarting to test nix-portable"
 
-                succ=$(false)
+                succ=$(false) || true
                 $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix --version && succ=$(true)
 
                 $succ || echo "test failed"
