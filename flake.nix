@@ -13,14 +13,16 @@
     let
 
       testImages = {
-        centos = builtins.fetchurl {
-          url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
-          sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
-        };
-        debian = builtins.fetchurl {
-          url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-arm64.qcow2";
-          sha256 = "0mz868j1k8jwhgg9a21dv7dr4rsy1bhklbqqw3qig06acy0vg8yi";
-        };
+        centos = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
+        debian = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-arm64.qcow2";
+        # centos = builtins.fetchurl {
+        #   url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
+        #   sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
+        # };
+        # debian = builtins.fetchurl {
+        #   url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-arm64.qcow2";
+        #   sha256 = "0mz868j1k8jwhgg9a21dv7dr4rsy1bhklbqqw3qig06acy0vg8yi";
+        # };
       };
     
       nixPortableForSystem = { system, crossSystem ? null,  }:
@@ -90,7 +92,9 @@
                 #!/usr/bin/env bash
                 set -e
 
-                img=${testImages."${os}"}
+                curl -L ${testImages."${os}"} > img
+
+                img=img
                 pubKey=${./testing/id_ed25519.pub}
                 privKey=${./testing/id_ed25519}
                 nixPortable=${packages.nix-portable}/bin/nix-portable
