@@ -104,9 +104,18 @@ let
 
 
     ### install binaries
+
+    export PATH_OLD="\$PATH"
+
+    # as soon as busybox is unpacked, restrict PATH to busybox to ensure reproducibility of this script
+    # only unpack binaries if necessary
     if test -e \$dir/fingerprint && [ "\$(cat \$dir/fingerprint)" == "\$fingerprint" ]; then
+
       debug "binaries already installed"
+      export PATH="\$dir/busybox/bin"
+
     else
+
       debug "installing binaries"
 
       # install busybox
@@ -119,6 +128,8 @@ let
         [ ! -e "\$dir/busybox/bin/\$bin" ] && ln -s busybox "\$dir/busybox/bin/\$bin"
       done
 
+      export PATH="\$dir/busybox/bin"
+
       # install other binaries
       ${installBin zstd "zstd"}
       ${installBin proot "proot"}
@@ -128,10 +139,6 @@ let
       # save fingerprint
       echo -n "\$fingerprint" > "\$dir/fingerprint"
     fi
-
-
-    ### add busybox to PATH
-    export PATH="\$PATH:\$dir/busybox/bin"
 
 
     ### gather paths to bind for proot
@@ -231,8 +238,6 @@ let
     # Install all the nix store paths necessary for the current nix-portable version
     # We only unpack missing store paths from the tar archive.
     # xz must be in PATH
-    PATH_OLD="\$PATH"
-    PATH="\$dir/bin/:\$PATH"
     index="$(cat ${storeTar}/index)"
 
     export missing=\$(
@@ -244,20 +249,20 @@ let
     )
 
     if [ -n "\$missing" ]; then
+      debug "extracting missing store paths"
       (
         mkdir -p \$dir/tmp \$dir/store/
         rm -rf \$dir/tmp/*
         cd \$dir/tmp
         unzip -qqp "\$self" ${ lib.removePrefix "/" "${storeTar}/tar"} \
-         | tar -x --zstd \$missing --strip-components 2
+          | \$dir/bin/zstd -d \
+          | tar -x \$missing --strip-components 2
         mv \$dir/tmp/* \$dir/store/
       )
     fi
 
-    PATH="\$PATH_OLD"
-
     if [ -n "\$missing" ]; then
-      debug "loading new store paths"
+      debug "registering new store paths to DB"
       reg="$(cat ${storeTar}/closureInfo/registration)"
       cmd="\$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
       debug "running command: \$cmd"
@@ -271,9 +276,8 @@ let
     else
       needGit=false
     fi
-    debug "needGit: \$needGit"
     if \$needGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
-      echo "Installing git. Disable this by setting 'NP_MINIMAL=1'"
+      echo "Installing git because it's missing. Disable this by setting 'NP_MINIMAL=1'"
       \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
         (import ${nixpkgsSrc} {}).git.out
       "
@@ -303,7 +307,9 @@ let
 
 
     ### set PATH
-    # add git
+    # restore original PATH and append busybox
+    export PATH="\$PATH_OLD:\$dir/busybox/bin"
+    # add git if necessary
     \$needGit && export PATH="\$PATH:${git.out}/bin"
 
 
