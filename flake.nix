@@ -24,7 +24,7 @@
         arch = {
           # from https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/artifacts/master/browse/output?job=build:secure
           url = "https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/20342/artifacts/file/output/Arch-Linux-x86_64-cloudimg-20210420.20342.qcow2";
-          sha256 = "794410309266af9f6da4b3c92f4fc37b744d51916dbe1f6f35b1842866193ebc";
+          sha256 = "1q0r74r3kydy26vjjh1xrf8zpxpi9wcky484h7qcrqxcbc0c3avs";
         };
       };
     
