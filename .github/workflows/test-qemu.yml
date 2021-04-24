@@ -6,6 +6,7 @@ on:
     branches: [master, ci]
 jobs:
   test_qemu:
+    name: Teston various distros via qemu
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -23,4 +24,4 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
     
-    - run: nix run -L .#pipeline-qemu-{{ matrix.qemu_os }}
+    - run: nix run -L .#pipeline-qemu-${{ matrix.qemu_os }}
