@@ -110,7 +110,7 @@
                   --copy-in $nixPortable:/ \
                   --selinux-relabel
 
-                ${pkgs.qemu}/bin/qemu-system-x86_64 -hda ./img -m 2048 -netdev user,hostfwd=tcp::10022-:22,id=n1 -device virtio-net-pci,netdev=n1 -nographic &
+                ${pkgs.qemu}/bin/qemu-system-x86_64 -hda ./img -m 2048 -netdev user,hostfwd=tcp::10022-:22,id=n1 -device virtio-net-pci,netdev=n1 &
 
                 while ! $ssh -o ConnectTimeout=2 true 2>/dev/null ; do
                   echo "waiting for ssh"
