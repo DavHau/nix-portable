@@ -54,7 +54,7 @@ let
 
   installBin = pkg: bin: ''
     unzip -qqoj "\$self" ${ lib.removePrefix "/" "${pkg}/bin/${bin}"} -d \$dir/bin
-    chmod +x \$dir/bin/${bin} # ;
+    chmod +wx \$dir/bin/${bin};
   '';
 
   installBinBase64 = pkg: bin: ''
@@ -79,6 +79,7 @@ let
     set -e
 
     self="\$(realpath \''${BASH_SOURCE[0]})"
+    fingerprint="_FINGERPRINT_PLACEHOLDER_"
 
     debug(){
       [ -n "\$NP_DEBUG" ] && echo \$@ || true
@@ -107,25 +108,34 @@ let
 
 
     ### install binaries
+    if test -e \$dir/fingerprint && [ "\$(cat \$dir/fingerprint)" == "\$fingerprint" ]; then
+      debug "binaries already installed"
+    else
+      debug "installing binaries"
 
-    # install busybox
-    mkdir -p \$dir/busybox/bin
-    (base64 -d> "\$dir/busybox/bin/busybox" && chmod +x "\$dir/busybox/bin/busybox") << END
+      # install busybox
+      mkdir -p \$dir/busybox/bin
+      (base64 -d> "\$dir/busybox/bin/busybox" && chmod +x "\$dir/busybox/bin/busybox") << END
     $(cat ${busybox}/bin/busybox | base64)
     END
+      busyBins="${toString (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${inp.busybox}/bin")))}"
+      for bin in \$busyBins; do
+        [ ! -e "\$dir/busybox/bin/\$bin" ] && ln -s busybox "\$dir/busybox/bin/\$bin"
+      done
 
-    busyBins="${toString (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${inp.busybox}/bin")))}"
-    for bin in \$busyBins; do
-      [ ! -e "\$dir/busybox/bin/\$bin" ] && ln -s busybox "\$dir/busybox/bin/\$bin"
-    done
+      # install other binaries
+      ${installBinBase64 zstd "zstd"}
+      ${installBin proot "proot"}
+      ${installBin bwrap "bwrap"}
+      ${installBin zstd "zstd"}
 
-    # add busybox to PATH
+      # save fingerprint
+      echo -n "\$fingerprint" > "\$dir/fingerprint"
+    fi
+
+
+    ### add busybox to PATH
     export PATH="\$PATH:\$dir/busybox/bin"
-
-    ${installBinBase64 zstd "zstd"}
-    ${installBin proot "proot"}
-    ${installBin bwrap "bwrap"}
-    ${installBin zstd "zstd"}
 
 
     ### gather paths to bind for proot
@@ -341,7 +351,16 @@ let
     $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
     $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
     $zip $out/bin/nix-portable.zip ${storeTar}/tar
-    mv $out/bin/nix-portable.zip $out/bin/nix-portable
+
+    # create fingerprint
+    fp=$(sha256sum $out/bin/nix-portable.zip | cut -d " "  -f 1)
+    sed -i "s/_FINGERPRINT_PLACEHOLDER_/$fp/g" $out/bin/nix-portable.zip
+    # fix broken zip header due to manual modification
+    ${zip}/bin/zip -F $out/bin/nix-portable.zip --out $out/bin/nix-portable-fixed.zip
+
+    rm $out/bin/nix-portable.zip
+    mv $out/bin/nix-portable-fixed.zip $out/bin/nix-portable
+
     chmod +x $out/bin/nix-portable
   '';
 in
