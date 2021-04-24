@@ -90,9 +90,7 @@
                 #!/usr/bin/env bash
                 set -e
 
-                curl -L ${testImages."${os}".url} > img.qcow2
-
-                img=img.qcow2
+                img=${fetchurl { inherit (testImages."${os}") url sha256 ;}}
                 pubKey=${./testing/id_ed25519.pub}
                 privKey=${./testing/id_ed25519}
                 nixPortable=${packages.nix-portable}/bin/nix-portable
@@ -101,7 +99,7 @@
                 cat $img > ./img
 
                 ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a ./img \
-                  --run-command 'useradd test' \
+                  --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
                   --ssh-inject test:file:$pubKey \
                   --copy-in $nixPortable:/ \
                   --selinux-relabel

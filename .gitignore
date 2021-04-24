@@ -2,3 +2,4 @@ test/
 result*
 vm/
 .direnv/
+img
