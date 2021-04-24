@@ -63,10 +63,12 @@ let
     END
   '';
 
-  busybox = packStaticBin "${inp.busybox}/bin/busybox";
+  bwrap = packStaticBin "${inp.bwrap}/bin/bwrap";
+  proot = packStaticBin "${inp.proot}/bin/proot";
+  zstd = packStaticBin "${inp.zstd}/bin/zstd";
 
   # the default nix store contents to extract when first used
-  storeTar = maketar ([ nix ] ++ [ busybox cacert nixpkgsSrc ]);
+  storeTar = maketar ([ cacert nix nixpkgsSrc ]);
 
 
   # The runtime script which unpacks the necessary files to $HOME/.nix-portable
@@ -364,4 +366,8 @@ let
     chmod +x $out/bin/nix-portable
   '';
 in
-nixPortable
+nixPortable.overrideAttrs (prev: {
+  passthru = (prev.passthru or {}) // {
+    inherit bwrap proot;
+  };
+})
