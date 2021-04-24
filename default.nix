@@ -41,7 +41,7 @@ let
     };
 
   installBin = pkg: bin: ''
-    unzip -qqoj "\''${BASH_SOURCE[0]}" ${ lib.removePrefix "/" "${pkg}/bin/${bin}"} -d \$dir/bin
+    unzip -qqoj "\$self" ${ lib.removePrefix "/" "${pkg}/bin/${bin}"} -d \$dir/bin
     chmod +x \$dir/bin/${bin} # ;
   '';
   installBin2 = pkg: bin: ''
@@ -62,6 +62,9 @@ let
     #!/usr/bin/env bash
 
     set -e
+    set -x
+
+    self="\$(realpath \''${BASH_SOURCE[0]})"
 
     debug(){
       [ -n "\$NP_DEBUG" ] && echo \$@ || true
@@ -208,12 +211,14 @@ let
     )
 
     if [ -n "\$missing" ]; then
+      (
         mkdir -p \$dir/tmp \$dir/store/
         rm -rf \$dir/tmp/*
         cd \$dir/tmp
-        unzip -qqp "\''${BASH_SOURCE[0]}" ${ lib.removePrefix "/" "${storeTar}/tar"} \
+        unzip -qqp "\$self" ${ lib.removePrefix "/" "${storeTar}/tar"} \
          | tar -xJ \$missing --strip-components 2
         mv \$dir/tmp/* \$dir/store/
+      )
     fi
 
     PATH="\$PATH_OLD"
