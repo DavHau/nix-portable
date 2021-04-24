@@ -6,7 +6,7 @@ on:
     branches: [master, ci]
 jobs:
   test_qemu:
-    name: Teston various distros via qemu
+    name: Test on various distros via qemu
     runs-on: ubuntu-latest
     strategy:
       matrix:
