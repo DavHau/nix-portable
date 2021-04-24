@@ -7,9 +7,9 @@ with builtins;
   zip,
   unixtools,
 
-  busybox ? pkgs.busybox,
+  busybox ? pkgs.pkgsStatic.busybox,
   cacert ? pkgs.cacert,
-  compression ? "xz -1 -T $(nproc)",
+  compression ? "zstd -19 -T0",
   git ? pkgs.git,
   gnutar ? pkgs.pkgsStatic.gnutar,
   lib ? pkgs.lib,
@@ -18,14 +18,16 @@ with builtins;
   perl ? pkgs.perl,
   pkgs ? import <nixpkgs> {},
   xz ? pkgs.pkgsStatic.xz,
+  zstd ? pkgs.pkgsStatic.zstd,
   ...
-}:
+}@inp:
+with lib;
 let
 
   maketar = targets:
     mkDerivation {
       name = "maketar";
-      nativeBuildInputs = [ perl ];
+      nativeBuildInputs = [ perl zstd ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
       buildCommand = ''
         storePaths=$(perl ${pkgs.pathsFromGraph} ./closure-*)
@@ -39,16 +41,29 @@ let
           $storePaths | ${compression} > $out/tar
       '';
     };
+  
+  packStaticBin = binPath: let
+      binName = (last (splitString "/" binPath)); in
+    pkgs.runCommand
+    binName
+    { nativeBuildInputs = [ pkgs.upx ]; }
+    ''
+      mkdir -p $out/bin
+      upx -9 -o $out/bin/${binName} ${binPath}
+    '';
 
   installBin = pkg: bin: ''
     unzip -qqoj "\$self" ${ lib.removePrefix "/" "${pkg}/bin/${bin}"} -d \$dir/bin
     chmod +x \$dir/bin/${bin} # ;
   '';
-  installBin2 = pkg: bin: ''
+
+  installBinBase64 = pkg: bin: ''
     (base64 -d> \$dir/bin/${bin} && chmod +x \$dir/bin/${bin}) << END
     $(cat ${pkg}/bin/${bin} | base64)
     END
   '';
+
+  busybox = packStaticBin "${inp.busybox}/bin/busybox";
 
   # the default nix store contents to extract when first used
   storeTar = maketar ([ nix ] ++ [ busybox cacert nixpkgsSrc ]);
@@ -62,7 +77,6 @@ let
     #!/usr/bin/env bash
 
     set -e
-    set -x
 
     self="\$(realpath \''${BASH_SOURCE[0]})"
 
@@ -93,10 +107,25 @@ let
 
 
     ### install binaries
+
+    # install busybox
+    mkdir -p \$dir/busybox/bin
+    (base64 -d> "\$dir/busybox/bin/busybox" && chmod +x "\$dir/busybox/bin/busybox") << END
+    $(cat ${busybox}/bin/busybox | base64)
+    END
+
+    busyBins="${toString (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${inp.busybox}/bin")))}"
+    for bin in \$busyBins; do
+      [ ! -e "\$dir/busybox/bin/\$bin" ] && ln -s busybox "\$dir/busybox/bin/\$bin"
+    done
+
+    # add busybox to PATH
+    export PATH="\$PATH:\$dir/busybox/bin"
+
+    ${installBinBase64 zstd "zstd"}
     ${installBin proot "proot"}
     ${installBin bwrap "bwrap"}
-    ${installBin xz "xz"}
-    ${installBin gnutar "tar"}
+    ${installBin zstd "zstd"}
 
 
     ### gather paths to bind for proot
@@ -216,7 +245,7 @@ let
         rm -rf \$dir/tmp/*
         cd \$dir/tmp
         unzip -qqp "\$self" ${ lib.removePrefix "/" "${storeTar}/tar"} \
-         | tar -xJ \$missing --strip-components 2
+         | tar -x --zstd \$missing --strip-components 2
         mv \$dir/tmp/* \$dir/store/
       )
     fi
@@ -270,8 +299,7 @@ let
 
 
     ### set PATH
-    # make available: git, gzip, tar, xz
-    export PATH="\$PATH:${busybox}/bin"
+    # add git
     \$needGit && export PATH="\$PATH:${git.out}/bin"
 
 
@@ -308,11 +336,11 @@ let
 
     unzip -vl $out/bin/nix-portable.zip
 
-    ${zip}/bin/zip $out/bin/nix-portable.zip ${proot}/bin/proot
-    ${zip}/bin/zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
-    ${zip}/bin/zip $out/bin/nix-portable.zip ${xz}/bin/xz
-    ${zip}/bin/zip $out/bin/nix-portable.zip ${gnutar}/bin/tar
-    ${zip}/bin/zip $out/bin/nix-portable.zip ${storeTar}/tar
+    zip="${zip}/bin/zip -0"
+    $zip $out/bin/nix-portable.zip ${proot}/bin/proot
+    $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
+    $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
+    $zip $out/bin/nix-portable.zip ${storeTar}/tar
     mv $out/bin/nix-portable.zip $out/bin/nix-portable
     chmod +x $out/bin/nix-portable
   '';

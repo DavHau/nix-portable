@@ -32,14 +32,15 @@
               patches = (_.patches or []) ++ [ ./nix-nfs.patch ];
             });
 
-            busybox = pkgsCached.busybox;
-            compression = "xz -1 -T $(nproc)";
+            busybox = pkgs.pkgsStatic.busybox;
+            compression = "zstd -18 -T0";
             gnutar = pkgs.pkgsStatic.gnutar;
             lib = inp.nixpkgs.lib;
             mkDerivation = pkgs.stdenv.mkDerivation;
             nixpkgsSrc = pkgs.path;
             perl = pkgs.pkgsBuildBuild.perl;
             xz = pkgs.pkgsStatic.xz;
+            zstd = pkgs.pkgsStatic.zstd;
           };
 
   in
