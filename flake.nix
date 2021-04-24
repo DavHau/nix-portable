@@ -18,8 +18,8 @@
           sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
         };
         debian = builtins.fetchurl {
-          url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-arm64.qcow2";
-          sha256 = "0mz868j1k8jwhgg9a21dv7dr4rsy1bhklbqqw3qig06acy0vg8yi";
+          url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
+          sha256 = "";
         };
       };
     
