@@ -7,9 +7,21 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, ... }@inp: 
+  outputs = { self, ... }@inp:
+    with builtins;
     with inp.nixpkgs.lib;
     let
+
+      testImages = {
+        centos = builtins.fetchurl {
+          url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
+          sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
+        };
+        debian = builtins.fetchurl {
+          url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-arm64.qcow2";
+          sha256 = "";
+        };
+      };
     
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
@@ -42,12 +54,74 @@
             xz = pkgs.pkgsStatic.xz;
             zstd = pkgs.pkgsStatic.zstd;
           };
+      
+      prepareCloudImage = pkgs: qcowImg: pkgs.runCommand "img-with-ssh" {} ''
+        ${pkgs.libguestfs-with-appliance}/virt-sysprep --version exit 1
+      '';
 
   in
     recursiveUpdate
-      (inp.flake-utils.lib.eachDefaultSystem (system: rec {
+      (inp.flake-utils.lib.eachDefaultSystem (system: let pkgs = inp.nixpkgs.legacyPackages."${system}"; in rec {
+        devShell = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            libguestfs-with-appliance
+            qemu
+          ];
+        };
         packages.nix-portable = nixPortableForSystem { inherit system; };
+        packages.test = let
+            nixPortable = nixPortableForSystem { inherit system; };
+            pkgs = inp.nixpkgs.legacyPackages."${system}"; in
+          runCommand
+            "test"
+            {
+              buildInputs = with pkgs; [ qemu ];
+            }
+            ''
+              qemu-system-x86_64 -hda CentOS-7-x86_64-GenericCloud-2003.qcow2 -m 2048 -net nic -net user -cpu max
+            '';
         defaultPackage = packages.nix-portable;
+        apps = mapAttrs' (os: img:
+          nameValuePair
+            "pipeline-qemu-${os}"
+            {
+              type = "app";
+              program = toString (pkgs.writeScript "pipeline-qemu-${os}" ''
+                #!/usr/bin/env bash
+                set -e
+
+                img=${testImages."${os}"}
+                pubKey=${./testing/id_ed25519.pub}
+                privKey=${./testing/id_ed25519}
+                nixPortable=${packages.nix-portable}/bin/nix-portable
+                ssh="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no test@localhost"
+
+                cat $img > ./img
+
+                ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a ./img \
+                  --run-command 'useradd test' \
+                  --ssh-inject test:file:$pubKey \
+                  --copy-in $nixPortable:/ \
+                  --selinux-relabel
+
+                ${pkgs.qemu}/bin/qemu-system-x86_64 -hda ./img -m 2048 -net user,hostfwd=tcp::10022-:22 -net nic -nographic &
+
+                while ! $ssh -o ConnectTimeout=2 true 2>/dev/null ; do
+                  echo "waiting for ssh"
+                  sleep 1
+                done
+
+                echo -e "\n\nstarting to test nix-portable"
+
+                succ=false
+                $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix --version && succ=true
+                $ssh poweroff
+
+                $succ || echo "test failed"
+                exit $succ
+              '');
+            }
+        ) testImages;  
       }))
       { packages = (genAttrs [ "x86_64-linux" ] (system:
           (listToAttrs (map (crossSystem: 
