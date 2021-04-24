@@ -5,11 +5,11 @@ on:
   push:
     branches: [master, ci]
 jobs:
-  build:
+  test_qemu:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        qemu-os: [ "centos" "debian" ]
+        qemu_os: [ "centos" "debian" ]
     steps:
 
     - uses: actions/checkout@v2
@@ -23,4 +23,4 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
     
-    - run: nix run -L .#pipeline-qemu-{{ matrix.qemu-os }}
+    - run: nix run -L .#pipeline-qemu-{{ matrix.qemu_os }}
