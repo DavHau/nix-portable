@@ -57,12 +57,6 @@ let
     chmod +wx \$dir/bin/${bin};
   '';
 
-  installBinBase64 = pkg: bin: ''
-    (base64 -d> \$dir/bin/${bin} && chmod +x \$dir/bin/${bin}) << END
-    $(cat ${pkg}/bin/${bin} | base64)
-    END
-  '';
-
   bwrap = packStaticBin "${inp.bwrap}/bin/bwrap";
   proot = packStaticBin "${inp.proot}/bin/proot";
   zstd = packStaticBin "${inp.zstd}/bin/zstd";
@@ -126,7 +120,7 @@ let
       done
 
       # install other binaries
-      ${installBinBase64 zstd "zstd"}
+      ${installBin zstd "zstd"}
       ${installBin proot "proot"}
       ${installBin bwrap "bwrap"}
       ${installBin zstd "zstd"}
