@@ -178,7 +178,7 @@ let
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$NP_BWRAP --bind / / --bind \$dir/store /nix/store ${busybox}/bin/busybox true 2>/dev/null; then
+      if \$NP_BWRAP --bind / / --bind \$dir/busybox/bin/busybox "\$HOME/.nix-portable/true" "\$HOME/.nix-portable/true" 2>/dev/null ; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -198,7 +198,6 @@ let
         --bind / /\\
         --dev-bind /dev /dev\\
         --bind \$dir/ /nix\\
-        --bind \$dir/store${lib.removePrefix "/nix/store" busybox}/bin/ /bin\\
         \$binds"
     else
       makeBindArgs -b ":" \$toBind
@@ -213,8 +212,7 @@ let
       binds="\$binds_1 \$binds"
       run="\$NP_PROOT \$PROOT_ARGS\\
         -R \$dir/emptyroot
-        -b \$dir/store:/nix/store\\
-        -b \$dir/store${lib.removePrefix "/nix/store" busybox}/bin/:/bin
+        -b \$dir/store:/nix/store
         \$binds"
     fi
 
@@ -269,7 +267,7 @@ let
       reg="$(cat ${storeTar}/closureInfo/registration)"
       cmd="\$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
       debug "running command: \$cmd"
-      echo "\$reg" | \$cmd 2>/dev/null
+      echo "\$reg" | \$cmd
     fi
 
 
