@@ -13,13 +13,13 @@
     let
 
       testImages = {
-        centos = builtins.fetchurl {
+        centos = {
           url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
           sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
         };
-        debian = builtins.fetchurl {
+        debian = {
           url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
-          sha256 = "";
+          sha256 = "0mf9k3pgzighibly1sy3cjq7c761r3akp8mlgd878lwf006vqrky";
         };
       };
     
@@ -90,7 +90,9 @@
                 #!/usr/bin/env bash
                 set -e
 
-                img=${testImages."${os}"}
+                curl -L ${testImages."${os}".url} > img
+
+                img=img
                 pubKey=${./testing/id_ed25519.pub}
                 privKey=${./testing/id_ed25519}
                 nixPortable=${packages.nix-portable}/bin/nix-portable
