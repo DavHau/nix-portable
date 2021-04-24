@@ -90,9 +90,9 @@
                 #!/usr/bin/env bash
                 set -e
 
-                curl -L ${testImages."${os}".url} > img
+                curl -L ${testImages."${os}".url} > img.qcow2
 
-                img=img
+                img=img.qcow2
                 pubKey=${./testing/id_ed25519.pub}
                 privKey=${./testing/id_ed25519}
                 nixPortable=${packages.nix-portable}/bin/nix-portable
