@@ -105,11 +105,12 @@
 
                 ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a ./img \
                   --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
+                  --run-command 'ssh-keygen -A' \
                   --ssh-inject test:file:$pubKey \
                   --copy-in $nixPortable:/ \
                   --selinux-relabel
 
-                ${pkgs.qemu}/bin/qemu-system-x86_64 -hda ./img -m 2048 -net user,hostfwd=tcp::10022-:22 -net nic -nographic &
+                ${pkgs.qemu}/bin/qemu-system-x86_64 -hda ./img -m 2048 -netdev user,hostfwd=tcp::10022-:22,id=n1 -device virtio-net-pci,netdev=n1 -nographic &
 
                 while ! $ssh -o ConnectTimeout=2 true 2>/dev/null ; do
                   echo "waiting for ssh"
@@ -118,8 +119,8 @@
 
                 echo -e "\n\nstarting to test nix-portable"
 
-                succ=false
-                $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix --version && succ=true
+                succ=$(false)
+                $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix --version && succ=$(true)
 
                 $succ || echo "test failed"
                 exit $succ
