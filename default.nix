@@ -3,10 +3,13 @@ with builtins;
   bwrap,
   nix,
   proot,
+  unzip,
+  zip,
+  unixtools,
 
-  busybox ? pkgs.busybox,
+  busybox ? pkgs.pkgsStatic.busybox,
   cacert ? pkgs.cacert,
-  compression ? "xz -1 -T $(nproc)",
+  compression ? "zstd -19 -T0",
   git ? pkgs.git,
   gnutar ? pkgs.pkgsStatic.gnutar,
   lib ? pkgs.lib,
@@ -15,14 +18,16 @@ with builtins;
   perl ? pkgs.perl,
   pkgs ? import <nixpkgs> {},
   xz ? pkgs.pkgsStatic.xz,
+  zstd ? pkgs.pkgsStatic.zstd,
   ...
-}:
+}@inp:
+with lib;
 let
 
   maketar = targets:
     mkDerivation {
       name = "maketar";
-      nativeBuildInputs = [ perl ];
+      nativeBuildInputs = [ perl zstd ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
       buildCommand = ''
         storePaths=$(perl ${pkgs.pathsFromGraph} ./closure-*)
@@ -36,15 +41,34 @@ let
           $storePaths | ${compression} > $out/tar
       '';
     };
+  
+  packStaticBin = binPath: let
+      binName = (last (splitString "/" binPath)); in
+    pkgs.runCommand
+    binName
+    { nativeBuildInputs = [ pkgs.upx ]; }
+    ''
+      mkdir -p $out/bin
+      upx -9 -o $out/bin/${binName} ${binPath}
+    '';
 
   installBin = pkg: bin: ''
+    unzip -qqoj "\$self" ${ lib.removePrefix "/" "${pkg}/bin/${bin}"} -d \$dir/bin
+    chmod +wx \$dir/bin/${bin};
+  '';
+
+  installBinBase64 = pkg: bin: ''
     (base64 -d> \$dir/bin/${bin} && chmod +x \$dir/bin/${bin}) << END
     $(cat ${pkg}/bin/${bin} | base64)
     END
   '';
 
+  bwrap = packStaticBin "${inp.bwrap}/bin/bwrap";
+  proot = packStaticBin "${inp.proot}/bin/proot";
+  zstd = packStaticBin "${inp.zstd}/bin/zstd";
+
   # the default nix store contents to extract when first used
-  storeTar = maketar ([ nix ] ++ [ busybox cacert nixpkgsSrc ]);
+  storeTar = maketar ([ cacert nix nixpkgsSrc ]);
 
 
   # The runtime script which unpacks the necessary files to $HOME/.nix-portable
@@ -55,6 +79,9 @@ let
     #!/usr/bin/env bash
 
     set -e
+
+    self="\$(realpath \''${BASH_SOURCE[0]})"
+    fingerprint="_FINGERPRINT_PLACEHOLDER_"
 
     debug(){
       [ -n "\$NP_DEBUG" ] && echo \$@ || true
@@ -83,10 +110,34 @@ let
 
 
     ### install binaries
-    ${installBin proot "proot"}
-    ${installBin bwrap "bwrap"}
-    ${installBin xz "xz"}
-    ${installBin gnutar "tar"}
+    if test -e \$dir/fingerprint && [ "\$(cat \$dir/fingerprint)" == "\$fingerprint" ]; then
+      debug "binaries already installed"
+    else
+      debug "installing binaries"
+
+      # install busybox
+      mkdir -p \$dir/busybox/bin
+      (base64 -d> "\$dir/busybox/bin/busybox" && chmod +x "\$dir/busybox/bin/busybox") << END
+    $(cat ${busybox}/bin/busybox | base64)
+    END
+      busyBins="${toString (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${inp.busybox}/bin")))}"
+      for bin in \$busyBins; do
+        [ ! -e "\$dir/busybox/bin/\$bin" ] && ln -s busybox "\$dir/busybox/bin/\$bin"
+      done
+
+      # install other binaries
+      ${installBinBase64 zstd "zstd"}
+      ${installBin proot "proot"}
+      ${installBin bwrap "bwrap"}
+      ${installBin zstd "zstd"}
+
+      # save fingerprint
+      echo -n "\$fingerprint" > "\$dir/fingerprint"
+    fi
+
+
+    ### add busybox to PATH
+    export PATH="\$PATH:\$dir/busybox/bin"
 
 
     ### gather paths to bind for proot
@@ -205,11 +256,10 @@ let
         mkdir -p \$dir/tmp \$dir/store/
         rm -rf \$dir/tmp/*
         cd \$dir/tmp
-        base64 -d | tar -xJ \$missing --strip-components 2
+        unzip -qqp "\$self" ${ lib.removePrefix "/" "${storeTar}/tar"} \
+         | tar -x --zstd \$missing --strip-components 2
         mv \$dir/tmp/* \$dir/store/
-      ) << END
-    $(cat ${storeTar}/tar | base64)
-    END
+      )
     fi
 
     PATH="\$PATH_OLD"
@@ -261,8 +311,7 @@ let
 
 
     ### set PATH
-    # make available: git, gzip, tar, xz
-    export PATH="\$PATH:${busybox}/bin"
+    # add git
     \$needGit && export PATH="\$PATH:${git.out}/bin"
 
 
@@ -270,20 +319,55 @@ let
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
     if [ "\$NP_RUNTIME" == "proot" ]; then
       debug "running command: \$NP_RUN \$bin \$@"
-      \$NP_RUN \$bin "\$@"
+      exec  \$NP_RUN \$bin "\$@"
     else
       cmd="\$NP_RUN \$bin \$@"
       debug "running command: \$cmd"
-      \$cmd
+      exec  \$cmd
     fi
   '';
 
   runtimeScriptEscaped = replaceStrings ["\""] ["\\\""] runtimeScript;
 
-  nixPortable = pkgs.runCommand "nix-portable" {} ''
+  nixPortable = pkgs.runCommand "nix-portable" {nativeBuildInputs = [unixtools.xxd unzip];} ''
     mkdir -p $out/bin
-    echo "${runtimeScriptEscaped}" > $out/bin/nix-portable
+    echo "${runtimeScriptEscaped}" > $out/bin/nix-portable.zip
+    xxd $out/bin/nix-portable.zip | tail
+
+    sizeA=$(printf "%08x" `stat -c "%s" $out/bin/nix-portable.zip` | tac -rs ..)
+    echo 504b 0304 0000 0000 0000 0000 0000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+    echo 0000 0000 0000 0000 0000 0200 0000 4242 | xxd -r -p >> $out/bin/nix-portable.zip
+
+    sizeB=$(printf "%08x" `stat -c "%s" $out/bin/nix-portable.zip` | tac -rs ..)
+    echo 504b 0102 0000 0000 0000 0000 0000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+    echo 0000 0000 0000 0000 0000 0000 0200 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+    echo 0000 0000 0000 0000 0000 $sizeA 4242 | xxd -r -p >> $out/bin/nix-portable.zip
+
+    echo 504b 0506 0000 0000 0000 0100 3000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+    echo $sizeB 0000 0000 0000 0000 0000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
+
+    unzip -vl $out/bin/nix-portable.zip
+
+    zip="${zip}/bin/zip -0"
+    $zip $out/bin/nix-portable.zip ${proot}/bin/proot
+    $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
+    $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
+    $zip $out/bin/nix-portable.zip ${storeTar}/tar
+
+    # create fingerprint
+    fp=$(sha256sum $out/bin/nix-portable.zip | cut -d " "  -f 1)
+    sed -i "s/_FINGERPRINT_PLACEHOLDER_/$fp/g" $out/bin/nix-portable.zip
+    # fix broken zip header due to manual modification
+    ${zip}/bin/zip -F $out/bin/nix-portable.zip --out $out/bin/nix-portable-fixed.zip
+
+    rm $out/bin/nix-portable.zip
+    mv $out/bin/nix-portable-fixed.zip $out/bin/nix-portable
+
     chmod +x $out/bin/nix-portable
   '';
 in
-nixPortable
+nixPortable.overrideAttrs (prev: {
+  passthru = (prev.passthru or {}) // {
+    inherit bwrap proot;
+  };
+})
