@@ -21,6 +21,11 @@
           url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
           sha256 = "0mf9k3pgzighibly1sy3cjq7c761r3akp8mlgd878lwf006vqrky";
         };
+        arch = {
+          # from https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/artifacts/master/browse/output?job=build:secure
+          url = "https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/20342/artifacts/file/output/Arch-Linux-x86_64-cloudimg-20210420.20342.qcow2";
+          sha256 = "794410309266af9f6da4b3c92f4fc37b744d51916dbe1f6f35b1842866193ebc";
+        };
       };
     
       nixPortableForSystem = { system, crossSystem ? null,  }:
@@ -115,7 +120,6 @@
 
                 succ=false
                 $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix --version && succ=true
-                $ssh poweroff
 
                 $succ || echo "test failed"
                 exit $succ
