@@ -23,7 +23,6 @@ jobs:
     - uses: cachix/cachix-action@v8
       with:
         name: nix-portable
-        # If you chose API tokens for write access OR if you have a private cache
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     
     - run: nix build -L .
@@ -57,5 +56,6 @@ jobs:
     - uses: cachix/cachix-action@v8
       with:
         name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     
     - run: nix run -L .#pipeline-qemu-${{ matrix.qemu_os }}
