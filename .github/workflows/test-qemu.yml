@@ -1,5 +1,5 @@
 
-name: "Build"
+name: "Test Qemu"
 on:
   pull_request:
   push:
