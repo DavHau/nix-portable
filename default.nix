@@ -101,6 +101,11 @@ let
         debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
       fi
     fi
+    if [ -n "\$SSL_CERT_FILE" ] && [[ ! "\$SSL_CERT_FILE" == /nix/* ]]; then
+      sslBind="\$SSL_CERT_FILE"
+    else
+      sslBind=/etc/ssl
+    fi
 
 
     ### install binaries
@@ -179,7 +184,7 @@ let
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$NP_BWRAP --bind / / --bind \$dir/busybox/bin/busybox "\$HOME/.nix-portable/true" "\$HOME/.nix-portable/true" 2>/dev/null ; then
+      if \$NP_BWRAP --bind / / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$HOME/.nix-portable/true" "\$HOME/.nix-portable/true" 2>/dev/null ; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -192,9 +197,7 @@ let
     mkdir -p \$dir/emptyroot
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
       # makeBindArgs --bind " " \$toBind
-      if [ -n "\$SSL_CERT_FILE" ] && [[ ! "\$SSL_CERT_FILE" == /nix/* ]]; then
-        makeBindArgs --bind " " \$SSL_CERT_FILE \$SSL_CERT_FILE
-      fi
+      makeBindArgs --bind " " \$sslBind \$sslBind
       run="\$NP_BWRAP \$BWRAP_ARGS \\
         --bind / /\\
         --dev-bind /dev /dev\\
@@ -203,13 +206,7 @@ let
     else
       makeBindArgs -b ":" \$toBind
       binds_1="\$binds"
-      if [ -n "\$SSL_CERT_FILE" ] && [[ ! "\$SSL_CERT_FILE" == /nix/* ]]; then
-        debug "creating bind args for \$SSL_CERT_FILE"
-        makeBindArgs -b ":" \$SSL_CERT_FILE \$SSL_CERT_FILE
-      else
-        debug "creating bind args for /etc/ssl"
-        makeBindArgs -b ":" /etc/ssl /etc/ssl
-      fi
+      makeBindArgs -b ":" \$sslBind \$sslBind
       binds="\$binds_1 \$binds"
       run="\$NP_PROOT \$PROOT_ARGS\\
         -R \$dir/emptyroot
