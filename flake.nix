@@ -23,10 +23,8 @@
         };
         arch = {
           # from https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/artifacts/master/browse/output?job=build:secure
-          # url = "https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/20342/artifacts/raw/output/Arch-Linux-x86_64-cloudimg-20210420.20342.qcow2";
-          url = "https://mirror.pkgbuild.com/images/v20210415.20050/Arch-Linux-x86_64-basic-20210415.20050.qcow2";
-          # sha256 = "0difkj8bl7y1gi89rjch6p2cqk2ay3pnkm3srdxp5kq6vnfa2gb8";
-          sha256 = "e89333536b0e3edf2bf863982a7ebc969a336b2c6c9dda9e533037f269eb21ac";
+          url = "https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/20342/artifacts/raw/output/Arch-Linux-x86_64-cloudimg-20210420.20342.qcow2";
+          sha256 = "0difkj8bl7y1gi89rjch6p2cqk2ay3pnkm3srdxp5kq6vnfa2gb8";
         };
       };
     
