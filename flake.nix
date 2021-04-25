@@ -169,6 +169,15 @@
               
               ${concatStringsSep "\n" (map (cmd: "$baseCmd ${cmd}") commandsToTest)}
             '');
+            job-local.type = "app";
+            job-local.program = toString (pkgs.writeScript "job-local" ''
+              #!/usr/bin/env bash
+              export NP_DEBUG=1
+              export NP_MINIMAL=1
+              ${concatStringsSep "\n" (map (cmd:
+                ''${packages.nix-portable}/bin/nix-portable ${cmd}''
+              ) commandsToTest)}
+            '');
           };
       }))
       { packages = (genAttrs [ "x86_64-linux" ] (system:

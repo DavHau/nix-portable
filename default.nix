@@ -76,16 +76,24 @@ let
 
     set -e
 
-    self="\$(realpath \''${BASH_SOURCE[0]})"
-    fingerprint="_FINGERPRINT_PLACEHOLDER_"
-
     debug(){
       [ -n "\$NP_DEBUG" ] && echo \$@ || true
     }
 
+    # to reference this script's file
+    self="\$(realpath \''${BASH_SOURCE[0]})"
+
+    # fingerprint will be inserted by builder
+    fingerprint="_FINGERPRINT_PLACEHOLDER_"
+
+    # user specified location for program files and nix store
     [ -z "\$NP_LOCATION" ] && NP_LOCATION="\$HOME"
     dir="\$NP_LOCATION/.nix-portable"
     mkdir -p \$dir/bin
+
+    # Nix portable ships its own nix.conf
+    export NIX_CONF_DIR=\$dir/conf/
+
 
 
     ### install files
@@ -101,7 +109,9 @@ let
 
     else
 
-      debug "installing binaries"
+      debug "installing files"
+
+      mkdir -p \$dir/emptyroot
 
       # install busybox
       mkdir -p \$dir/busybox/bin
@@ -126,11 +136,11 @@ let
 
       # create nix config
       mkdir -p \$dir/conf/
-      export NIX_CONF_DIR=\$dir/conf/
 
       echo "build-users-group = " > \$dir/conf/nix.conf
       echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
       echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
+      echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
 
       # disable sandbox until sandbox-fallback is fixed: https://github.com/NixOS/nix/issues/4719
       echo "sandbox = false" >> \$dir/conf/nix.conf
@@ -146,36 +156,52 @@ let
     if [ -z "\$SSL_CERT_FILE" ]; then
       debug "SSL_CERT_FILE not defined. trying to find certs automatically"
       if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
-        debug "found /etc/ssl/certs/ca-bundle.crt"
         export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
+        debug "found /etc/ssl/certs/ca-bundle.crt which is a symlink to \$SSL_CERT_FILE"
       elif [ -e /etc/ssl/certs/ca-certificates.crt ]; then
-        debug "found /etc/ssl/certs/ca-certificates.crt"
         export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-certificates.crt)
+        debug "found /etc/ssl/certs/ca-certificates.crt which is a symlink to \$SSL_CERT_FILE"
       elif [ ! -e /etc/ssl/certs ]; then
-        debug "/etc/ssl/certs does not exist, using certs from nixpkgs"
+        debug "/etc/ssl/certs does not exist. Will use certs from nixpkgs."
         export SSL_CERT_FILE=\$dir/ca-bundle.crt
       else
         debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
       fi
     fi
-    if [ -n "\$SSL_CERT_FILE" ] && [[ ! "\$SSL_CERT_FILE" == /nix/* ]]; then
+    if [ -n "\$SSL_CERT_FILE" ]; then
       sslBind="\$SSL_CERT_FILE"
     else
       sslBind=/etc/ssl
     fi
 
 
-    ### gather paths to bind for proot
-    paths="\$(find / -mindepth 1 -maxdepth 1 -not -name etc)"
-    paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
-    toBind=""
-    mkdir -p \$dir/shared-files
-    for p in \$paths; do
-      if [ -e "\$p" ]; then
-        real=\$(realpath \$p)
-        [ -e "\$real" ] && toBind="\$toBind \$real \$p"
+    collectProotBinds(){
+      ### gather paths to bind for proot
+      # we cannot bind / to / without running into a lot of trouble, therefore
+      # we need to collect all top level directories and bind them inside an empty root
+      paths="\$(find / -mindepth 1 -maxdepth 1 -not -name etc)"
+      paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
+
+      toBind=""
+      for p in \$paths; do
+        if [ -e "\$p" ]; then
+          real=\$(realpath \$p)
+          [ -e "\$real" ] && toBind="\$toBind \$real \$p"
+        fi
+      done
+    }
+
+    collectBwrapBinds(){
+      toBind=""
+      # if we're on a nixos, the /bin/sh symlink will point
+      # to a /nix/store path which doesn't exit inside the wrapped env
+      # we fix this with by binding exactly that path
+      if test -s /bin/sh && [[ "\$(realpath /bin/sh)" == /nix/store/* ]]; then
+        real="\$(realpath /bin/sh)"
+        target="\$(dirname \$real)"
+        toBind="\$toBind \$dir/busybox/bin \$target"
       fi
-    done
+    }
 
     makeBindArgs(){
       arg=\$1; shift
@@ -195,10 +221,10 @@ let
 
     ### select container runtime
     debug "figuring out which runtime to use"
-    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(which bwrap 2>/dev/null) || true
+    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>/dev/null) || true
     [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$dir/bin/bwrap
     debug "bwrap executable: \$NP_BWRAP"
-    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(which proot 2>/dev/null) || true
+    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>/dev/null) || true
     [ -z "\$NP_PROOT" ] && NP_PROOT=\$dir/bin/proot
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
@@ -213,24 +239,27 @@ let
     else
       debug "runtime selected via NP_RUNTIME : \$NP_RUNTIME"
     fi
-    mkdir -p \$dir/emptyroot
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
-      # makeBindArgs --bind " " \$toBind
-      makeBindArgs --bind " " \$sslBind \$sslBind
+      collectBwrapBinds
+      makeBindArgs --bind " " \$toBind \$sslBind \$sslBind
       run="\$NP_BWRAP \$BWRAP_ARGS \\
         --bind / /\\
         --dev-bind /dev /dev\\
         --bind \$dir/ /nix\\
         \$binds"
+        # --bind \$dir/busybox/bin/busybox /bin/sh\\
     else
+      # proot
+      collectProotBinds
       makeBindArgs -b ":" \$toBind
-      binds_1="\$binds"
+      bindsAll="\$binds"
       makeBindArgs -b ":" \$sslBind \$sslBind
-      binds="\$binds_1 \$binds"
+      binds="\$bindsAll \$binds"
       run="\$NP_PROOT \$PROOT_ARGS\\
-        -R \$dir/emptyroot
-        -b \$dir/store:/nix/store
+        -R \$dir/emptyroot\\
+        -b \$dir/store:/nix/store\\
         \$binds"
+        # -b \$dir/busybox/bin/busybox:/bin/sh\\
     fi
 
 
@@ -318,16 +347,15 @@ let
     # add git if necessary
     \$needGit && export PATH="\$PATH:${git.out}/bin"
 
-
     ### run commands
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
     if [ "\$NP_RUNTIME" == "proot" ]; then
       debug "running command: \$NP_RUN \$bin \$@"
-      exec  \$NP_RUN \$bin "\$@"
+      exec \$NP_RUN \$bin "\$@"
     else
       cmd="\$NP_RUN \$bin \$@"
       debug "running command: \$cmd"
-      exec  \$cmd
+      exec \$NP_RUN \$bin "\$@"
     fi
   '';
 
