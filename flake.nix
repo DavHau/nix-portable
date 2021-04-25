@@ -15,6 +15,14 @@
       # Images use din the test pipeline
       # After adding a new system, don't forget to add the name also in ./.github/workflows
       testImages = {
+        arch = {
+          url = "https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/20342/artifacts/raw/output/Arch-Linux-x86_64-basic-20210420.20342.qcow2";
+          sha256 = "b59f7218df206b135a0cd9a288e79e35cf892bca0c71373588d0d10b029d50a4";
+          extraVirtCustomizeCommands = [
+            "--run-command 'systemctl disable pacman-init'"
+            "--run-command 'systemctl disable reflector-init'"
+          ];
+        };
         centos7 = {
           url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
           sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
@@ -27,13 +35,9 @@
           url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
           sha256 = "0mf9k3pgzighibly1sy3cjq7c761r3akp8mlgd878lwf006vqrky";
         };
-        arch = {
-          url = "https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/20342/artifacts/raw/output/Arch-Linux-x86_64-basic-20210420.20342.qcow2";
-          sha256 = "b59f7218df206b135a0cd9a288e79e35cf892bca0c71373588d0d10b029d50a4";
-          extraVirtCustomizeCommands = [
-            "--run-command 'systemctl disable pacman-init'"
-            "--run-command 'systemctl disable reflector-init'"
-          ];
+        ubuntu = {
+          url = "https://cloud-images.ubuntu.com/focal/20210415/focal-server-cloudimg-amd64.img";
+          sha256 = "38b82727bfc1b36d9784bf07b8368c1d777450e978837e1cd7fa32b31837e77c";
         };
       };
     
