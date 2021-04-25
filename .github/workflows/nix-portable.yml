@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        qemu_os: [ arch, centos7, centos8, debian ]
+        qemu_os: [ arch, centos7, centos8, debian, ubuntu ]
     steps:
 
     - uses: actions/checkout@v2
