@@ -192,7 +192,7 @@ let
     mkdir -p \$dir/emptyroot
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
       # makeBindArgs --bind " " \$toBind
-      if [ -n "\$SSL_CERT_FILE" ]; then
+      if [ -n "\$SSL_CERT_FILE" ] && [[ ! "\$SSL_CERT_FILE" == /nix/* ]]; then
         makeBindArgs --bind " " \$SSL_CERT_FILE \$SSL_CERT_FILE
       fi
       run="\$NP_BWRAP \$BWRAP_ARGS \\
@@ -203,7 +203,7 @@ let
     else
       makeBindArgs -b ":" \$toBind
       binds_1="\$binds"
-      if [ -n "\$SSL_CERT_FILE" ]; then
+      if [ -n "\$SSL_CERT_FILE" ] && [[ ! "\$SSL_CERT_FILE" == /nix/* ]]; then
         debug "creating bind args for \$SSL_CERT_FILE"
         makeBindArgs -b ":" \$SSL_CERT_FILE \$SSL_CERT_FILE
       else
