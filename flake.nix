@@ -45,9 +45,8 @@
       };
 
       commandsToTest = [
-        "nix --version"
-        "nix-shell -p hello --run hello"
         "nix build --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'"
+        "nix-shell -p hello --run hello"
       ];
     
       nixPortableForSystem = { system, crossSystem ? null,  }:
@@ -143,7 +142,7 @@
 
                     # test some nix commands
                     ${concatStringsSep "\n" (map (cmd:
-                      "$ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable ${cmd}"
+                      ''$ssh "NP_DEBUG=1 NP_MINIMAL=1 /nix-portable ${cmd}"''
                     ) commandsToTest)}
 
                     echo "all tests succeeded"
