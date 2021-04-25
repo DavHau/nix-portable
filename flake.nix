@@ -102,16 +102,16 @@
           let
             makeQemuPipelines = debug: mapAttrs' (os: img:
               nameValuePair
-                "pipeline-qemu-${os}${optionalString debug "-debug"}"
+                "job-qemu-${os}${optionalString debug "-debug"}"
                 {
                   type = "app";
-                  program = toString (pkgs.writeScript "pipeline-qemu-${os}" ''
+                  program = toString (pkgs.writeScript "job-qemu-${os}" ''
                     #!/usr/bin/env bash
                     set -e
 
                     img=${fetchurl { inherit (testImages."${os}") url sha256 ;}}
-                    pubKey=${./testing/id_ed25519.pub}
-                    privKey=${./testing/id_ed25519}
+                    pubKey=${./testing}/id_ed25519.pub
+                    privKey=${./testing}/id_ed25519
                     nixPortable=${packages.nix-portable}/bin/nix-portable
                     ssh="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no test@localhost"
 
@@ -142,18 +142,21 @@
                     echo -e "\n\nstarting to test nix-portable"
 
                     # test some nix commands
-                    ${concatStringsSep "\n" (map (cmd: "$ssh ${cmd}") commandsToTest)}
+                    ${concatStringsSep "\n" (map (cmd:
+                      "$ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable ${cmd}"
+                    ) commandsToTest)}
 
                     echo "all tests succeeded"
                   '');
                 }
             ) testImages;
         in
-          # generate pipelines with and without debug settings
+          # generate jobs with and without debug settings
           makeQemuPipelines true // makeQemuPipelines false
+          # add 
           // {
-            pipeline-docker-debian.type = "app";
-            pipeline-docker-debian.program = toString (pkgs.writeScript "pipeline-docker-debian" ''
+            job-docker-debian.type = "app";
+            job-docker-debian.program = toString (pkgs.writeScript "job-docker-debian" ''
               #!/usr/bin/env bash
 
               DOCKER_CMD="''${DOCKER_CMD:-docker run}"
