@@ -9,10 +9,16 @@ Nix as a single binary which works without previous installation/configuration a
   - be able to use the official binary cache (by simulating the /nix/store)
   - make it easy to distribute nix (via other package managers)
 
-### Systems confirmed working (Please add yours via PR):
-  - CentOS 7
-  - Debian (in docker)
-  - NixOS
+### Tested on the following systems/environments:
+  * Distros:
+    - Arch Linux
+    - Debian 10
+    - CentOS 7
+    - CentOS 8
+    - NixOS
+    - Ubuntu 20.04
+  * Other Environments:
+    - Docker (debian image)
 
 ### Under the hood:
   - the nix-portable binary is a self extracting archive, caching its contents under $HOME/.nix-portable

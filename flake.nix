@@ -12,7 +12,7 @@
     with inp.nixpkgs.lib;
     let
 
-      # Images use din the test pipeline
+      # Linux distro images to test nix-portable against
       # After adding a new system, don't forget to add the name also in ./.github/workflows
       testImages = {
         arch = {
@@ -38,6 +38,9 @@
         ubuntu = {
           url = "https://cloud-images.ubuntu.com/focal/20210415/focal-server-cloudimg-amd64.img";
           sha256 = "38b82727bfc1b36d9784bf07b8368c1d777450e978837e1cd7fa32b31837e77c";
+          extraVirtCustomizeCommands = [
+            "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
+          ];
         };
       };
     
@@ -88,48 +91,62 @@
         };
         packages.nix-portable = nixPortableForSystem { inherit system; };
         defaultPackage = packages.nix-portable;
-        apps = mapAttrs' (os: img:
-          nameValuePair
-            "pipeline-qemu-${os}"
-            {
-              type = "app";
-              program = toString (pkgs.writeScript "pipeline-qemu-${os}" ''
-                #!/usr/bin/env bash
-                set -e
+        apps =
+          let
+            makeQemuPipelines = debug: mapAttrs' (os: img:
+              nameValuePair
+                "pipeline-qemu-${os}${optionalString debug "-debug"}"
+                {
+                  type = "app";
+                  program = toString (pkgs.writeScript "pipeline-qemu-${os}" ''
+                    #!/usr/bin/env bash
+                    set -e
 
-                img=${fetchurl { inherit (testImages."${os}") url sha256 ;}}
-                pubKey=${./testing/id_ed25519.pub}
-                privKey=${./testing/id_ed25519}
-                nixPortable=${packages.nix-portable}/bin/nix-portable
-                ssh="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no test@localhost"
+                    img=${fetchurl { inherit (testImages."${os}") url sha256 ;}}
+                    pubKey=${./testing/id_ed25519.pub}
+                    privKey=${./testing/id_ed25519}
+                    nixPortable=${packages.nix-portable}/bin/nix-portable
+                    ssh="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no test@localhost"
 
-                cat $img > ./img
+                    cat $img > /tmp/img
 
-                ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a ./img \
-                  --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
-                  --run-command 'ssh-keygen -A' \
-                  --ssh-inject test:file:$pubKey \
-                  --copy-in $nixPortable:/ \
-                  ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
-                  --selinux-relabel
+                    ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/img \
+                      --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
+                      --run-command 'ssh-keygen -A' \
+                      --ssh-inject test:file:$pubKey \
+                      --copy-in $nixPortable:/ \
+                      ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
+                      ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
+                      --selinux-relabel
 
-                ${pkgs.qemu}/bin/qemu-system-x86_64 -hda ./img -m 2048 -netdev user,hostfwd=tcp::10022-:22,id=n1 -device virtio-net-pci,netdev=n1 -nographic &
+                    ${pkgs.qemu}/bin/qemu-system-x86_64 \
+                      -hda /tmp/img \
+                      -m 2048 \
+                      -netdev user,hostfwd=tcp::10022-:22,id=n1 \
+                      -device virtio-net-pci,netdev=n1 \
+                      ${optionalString (! debug) "-nographic"} \
+                      &
 
-                while ! $ssh -o ConnectTimeout=2 true 2>/dev/null ; do
-                  echo "waiting for ssh"
-                  sleep 1
-                done
+                    while ! $ssh -o ConnectTimeout=2 true 2>/dev/null ; do
+                      echo "waiting for ssh"
+                      sleep 1
+                    done
 
-                echo -e "\n\nstarting to test nix-portable"
+                    echo -e "\n\nstarting to test nix-portable"
 
-                succ=$(false) || true
-                $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix --version && succ=$(true)
+                    # test nix executable
+                    $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix --version
+                    # test buildig and executing hello
+                    $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix build --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'
+                    # test nix-shell + executing the hello binary
+                    $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix-shell -p bash --run result/bin/hello
 
-                $succ || echo "test failed"
-                exit $succ
-              '');
-            }
-        ) testImages;  
+                    echo "all tests succeeded"
+                  '');
+                }
+            ) testImages;
+        in
+          makeQemuPipelines true // makeQemuPipelines false;
       }))
       { packages = (genAttrs [ "x86_64-linux" ] (system:
           (listToAttrs (map (crossSystem: 
