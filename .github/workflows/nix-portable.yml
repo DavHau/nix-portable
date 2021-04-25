@@ -78,16 +78,16 @@ jobs:
       with:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
-    
-    - uses: cachix/cachix-action@v8
-      with:
-        name: nix-portable
-        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
     - uses: cachix/install-nix-action@v12
       with:
         install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
         extra_nix_config: |
           experimental-features = nix-command flakes
+    
+    - uses: cachix/cachix-action@v8
+      with:
+        name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     
     - run: nix run -L .#job-docker-debian
