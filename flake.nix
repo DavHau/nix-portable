@@ -161,7 +161,7 @@
               DOCKER_CMD="''${DOCKER_CMD:-docker}"
 
               baseCmd="\
-                $DOCKER_CMD run -it --rm \
+                $DOCKER_CMD run -i --rm \
                   -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
                   -e "NP_MINIMAL=1" \
                   -e "NP_DEBUG=1" \
