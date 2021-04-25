@@ -5,6 +5,9 @@ on:
   push:
     branches: [master, ci]
 jobs:
+
+
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -33,9 +36,12 @@ jobs:
         name: nix-portable
         path: result/bin/nix-portable
 
-      
+
+
+
   test_qemu:
     name: Test on various distros via qemu
+    needs: build
     runs-on: ubuntu-latest
     strategy:
       matrix:
