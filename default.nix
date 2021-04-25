@@ -57,6 +57,8 @@ let
     chmod +wx \$dir/bin/${bin};
   '';
 
+  caBundleZstd = pkgs.runCommand "cacerts" {} "cat ${cacert}/etc/ssl/certs/ca-bundle.crt | ${inp.zstd}/bin/zstd -19 > $out";
+
   bwrap = packStaticBin "${inp.bwrap}/bin/bwrap";
   proot = packStaticBin "${inp.proot}/bin/proot";
   zstd = packStaticBin "${inp.zstd}/bin/zstd";
@@ -86,31 +88,9 @@ let
     mkdir -p \$dir/bin
 
 
-    ### setup SSL
-    # find ssl certs or use from nixpkgs
-    debug "figuring out ssl certs"
-    if [ -z "\$SSL_CERT_FILE" ]; then
-      debug "SSL_CERT_FILE not defined. trying to find certs automatically"
-      if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
-        debug "found /etc/ssl/certs/ca-bundle.crt"
-        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
-      elif [ ! -e /etc/ssl/certs ]; then
-        debug "/etc/ssl/certs does not exist, using certs from nixpkgs"
-        export SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt
-      else
-        debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
-      fi
-    fi
-    if [ -n "\$SSL_CERT_FILE" ] && [[ ! "\$SSL_CERT_FILE" == /nix/* ]]; then
-      sslBind="\$SSL_CERT_FILE"
-    else
-      sslBind=/etc/ssl
-    fi
+    ### install files
 
-
-    ### install binaries
-
-    export PATH_OLD="\$PATH"
+    PATH_OLD="\$PATH"
 
     # as soon as busybox is unpacked, restrict PATH to busybox to ensure reproducibility of this script
     # only unpack binaries if necessary
@@ -141,8 +121,44 @@ let
       ${installBin bwrap "bwrap"}
       ${installBin zstd "zstd"}
 
+      # install ssl cert bundle
+      unzip -poj "\$self" ${ lib.removePrefix "/" "${caBundleZstd}"} | \$dir/bin/zstd -d > \$dir/ca-bundle.crt
+
+      # create nix config
+      mkdir -p \$dir/conf/
+      export NIX_CONF_DIR=\$dir/conf/
+
+      echo "build-users-group = " > \$dir/conf/nix.conf
+      echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
+      echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
+
+      # disable sandbox until sandbox-fallback is fixed: https://github.com/NixOS/nix/issues/4719
+      echo "sandbox = false" >> \$dir/conf/nix.conf
+
       # save fingerprint
       echo -n "\$fingerprint" > "\$dir/fingerprint"
+    fi
+
+
+    ### setup SSL
+    # find ssl certs or use from nixpkgs
+    debug "figuring out ssl certs"
+    if [ -z "\$SSL_CERT_FILE" ]; then
+      debug "SSL_CERT_FILE not defined. trying to find certs automatically"
+      if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
+        debug "found /etc/ssl/certs/ca-bundle.crt"
+        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
+      elif [ ! -e /etc/ssl/certs ]; then
+        debug "/etc/ssl/certs does not exist, using certs from nixpkgs"
+        export SSL_CERT_FILE=\$dir/ca-bundle.crt
+      else
+        debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
+      fi
+    fi
+    if [ -n "\$SSL_CERT_FILE" ] && [[ ! "\$SSL_CERT_FILE" == /nix/* ]]; then
+      sslBind="\$SSL_CERT_FILE"
+    else
+      sslBind=/etc/ssl
     fi
 
 
@@ -213,16 +229,6 @@ let
         -b \$dir/store:/nix/store
         \$binds"
     fi
-
-
-    ### generate nix config
-    mkdir -p \$dir/conf/
-    echo "build-users-group = " > \$dir/conf/nix.conf
-    echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
-    echo "sandbox = true" >> \$dir/conf/nix.conf
-    echo "sandbox-fallback = true" >> \$dir/conf/nix.conf
-    echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
-    export NIX_CONF_DIR=\$dir/conf/
 
 
     ### setup environment
@@ -348,6 +354,7 @@ let
     $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
     $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
     $zip $out/bin/nix-portable.zip ${storeTar}/tar
+    $zip $out/bin/nix-portable.zip ${caBundleZstd}
 
     # create fingerprint
     fp=$(sha256sum $out/bin/nix-portable.zip | cut -d " "  -f 1)
