@@ -43,6 +43,12 @@
           ];
         };
       };
+
+      commandsToTest = [
+        "nix --version"
+        "nix-shell -p hello --run hello"
+        "nix build --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'"
+      ];
     
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
@@ -87,6 +93,7 @@
           buildInputs = with pkgs; [
             libguestfs-with-appliance
             qemu
+            bashInteractive
           ];
         };
         packages.nix-portable = nixPortableForSystem { inherit system; };
@@ -134,19 +141,33 @@
 
                     echo -e "\n\nstarting to test nix-portable"
 
-                    # test nix executable
-                    $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix --version
-                    # test buildig and executing hello
-                    $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix build --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'
-                    # test nix-shell + executing the hello binary
-                    $ssh NP_DEBUG=1 NP_MINIMAL=1 /nix-portable nix-shell -p bash --run result/bin/hello
+                    # test some nix commands
+                    ${concatStringsSep "\n" (map (cmd: "$ssh ${cmd}") commandsToTest)}
 
                     echo "all tests succeeded"
                   '');
                 }
             ) testImages;
         in
-          makeQemuPipelines true // makeQemuPipelines false;
+          # generate pipelines with and without debug settings
+          makeQemuPipelines true // makeQemuPipelines false
+          // {
+            pipeline-docker-debian.type = "app";
+            pipeline-docker-debian.program = toString (pkgs.writeScript "pipeline-docker-debian" ''
+              #!/usr/bin/env bash
+
+              DOCKER_CMD="''${DOCKER_CMD:-docker run}"
+
+              baseCmd="\
+                $DOCKER_CMD run -it --rm \
+                  -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
+                  -e "NP_MINIMAL=1" \
+                  -e "NP_DEBUG=1" \
+                  debian /nix-portable"
+              
+              ${concatStringsSep "\n" (map (cmd: "$baseCmd ${cmd}") commandsToTest)}
+            '');
+          };
       }))
       { packages = (genAttrs [ "x86_64-linux" ] (system:
           (listToAttrs (map (crossSystem: 
