@@ -68,10 +68,10 @@ jobs:
 
 
 
-    test_docker:
-      name: Test inside docker container
-      needs: build
-      runs-on: ubuntu-latest
+  test_docker:
+    name: Test inside docker container
+    needs: build
+    runs-on: ubuntu-latest
     steps:
 
     - uses: actions/checkout@v2
