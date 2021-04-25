@@ -40,7 +40,7 @@ jobs:
 
 
   test_qemu:
-    name: Test on various distros via qemu
+    name: Test on distro via qemu
     needs: build
     runs-on: ubuntu-latest
     strategy:
@@ -78,6 +78,11 @@ jobs:
       with:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
+    
+    - uses: cachix/cachix-action@v8
+      with:
+        name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
     - uses: cachix/install-nix-action@v12
       with:
