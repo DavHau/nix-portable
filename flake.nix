@@ -15,9 +15,13 @@
       # Images use din the test pipeline
       # After adding a new system, don't forget to add the name also in ./.github/workflows
       testImages = {
-        centos = {
+        centos7 = {
           url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
           sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
+        };
+        centos8 = {
+          url = "https://cloud.centos.org/altarch/8/x86_64/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2";
+          sha256 = "7ec97062618dc0a7ebf211864abf63629da1f325578868579ee70c495bed3ba0";
         };
         debian = {
           url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
@@ -79,17 +83,6 @@
           ];
         };
         packages.nix-portable = nixPortableForSystem { inherit system; };
-        packages.test = let
-            nixPortable = nixPortableForSystem { inherit system; };
-            pkgs = inp.nixpkgs.legacyPackages."${system}"; in
-          runCommand
-            "test"
-            {
-              buildInputs = with pkgs; [ qemu ];
-            }
-            ''
-              qemu-system-x86_64 -hda CentOS-7-x86_64-GenericCloud-2003.qcow2 -m 2048 -net nic -net user -cpu max
-            '';
         defaultPackage = packages.nix-portable;
         apps = mapAttrs' (os: img:
           nameValuePair
