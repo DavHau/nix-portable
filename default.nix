@@ -148,6 +148,9 @@ let
       if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
         debug "found /etc/ssl/certs/ca-bundle.crt"
         export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
+      elif [ -e /etc/ssl/certs/ca-certificates.crt ]; then
+        debug "found /etc/ssl/certs/ca-certificates.crt"
+        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-certificates.crt)
       elif [ ! -e /etc/ssl/certs ]; then
         debug "/etc/ssl/certs does not exist, using certs from nixpkgs"
         export SSL_CERT_FILE=\$dir/ca-bundle.crt
