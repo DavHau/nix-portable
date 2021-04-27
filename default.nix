@@ -380,7 +380,7 @@ let
     if [ "\$newNPVersion" == "true" ] || [ "\$lastRuntime" != "\$NP_RUNTIME" ]; then
       nixBin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-build"
       debug "Testing if nix can build stuff without sandbox"
-      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false; then
+      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false &>/dev/null; then
         echo "Fatal error: nix is unable to build packages"
         exit 1
       fi
