@@ -1,0 +1,118 @@
+
+name: "Build"
+on:
+  pull_request:
+  push:
+    branches: [master, ci]
+jobs:
+
+
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+      with:
+          # Nix Flakes doesn't work on shallow clones
+          fetch-depth: 0
+
+    - uses: cachix/install-nix-action@v12
+      with:
+        install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    
+    - uses: cachix/cachix-action@v8
+      with:
+        name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+    
+    - run: nix build -L .
+
+    - name: Archive result
+      uses: actions/upload-artifact@v2
+      with:
+        name: nix-portable
+        path: result/bin/nix-portable
+
+
+
+
+  test_qemu:
+    name: Test on distro via qemu
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        qemu_os: [ arch, centos7, centos8, debian, ubuntu ]
+    steps:
+
+    - uses: actions/checkout@v2
+      with:
+          # Nix Flakes doesn't work on shallow clones
+          fetch-depth: 0
+
+    - uses: cachix/install-nix-action@v12
+      with:
+        install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+
+    - uses: cachix/cachix-action@v8
+      with:
+        name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+    
+    - run: nix run -L .#job-qemu-${{ matrix.qemu_os }}
+
+
+
+  test_docker:
+    name: Test inside docker container
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+      with:
+          # Nix Flakes doesn't work on shallow clones
+          fetch-depth: 0
+
+    - uses: cachix/install-nix-action@v12
+      with:
+        install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    
+    - uses: cachix/cachix-action@v8
+      with:
+        name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+    
+    - run: nix run -L .#job-docker-debian
+
+
+  test_github:
+    name: Test inside github action
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+      with:
+          # Nix Flakes doesn't work on shallow clones
+          fetch-depth: 0
+
+    - uses: cachix/install-nix-action@v12
+      with:
+        install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    
+    - uses: cachix/cachix-action@v8
+      with:
+        name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+    
+    - run: nix run -L .#job-local

@@ -57,11 +57,7 @@ let
     chmod +wx \$dir/bin/${bin};
   '';
 
-  installBinBase64 = pkg: bin: ''
-    (base64 -d> \$dir/bin/${bin} && chmod +x \$dir/bin/${bin}) << END
-    $(cat ${pkg}/bin/${bin} | base64)
-    END
-  '';
+  caBundleZstd = pkgs.runCommand "cacerts" {} "cat ${cacert}/etc/ssl/certs/ca-bundle.crt | ${inp.zstd}/bin/zstd -19 > $out";
 
   bwrap = packStaticBin "${inp.bwrap}/bin/bwrap";
   proot = packStaticBin "${inp.proot}/bin/proot";
@@ -79,41 +75,74 @@ let
     #!/usr/bin/env bash
 
     set -e
+    if [ -n "\$NP_DEBUG" ] && [ "\$NP_DEBUG" -ge 2 ]; then
+      set -x
+    fi
 
+    if [ -n "\$NP_DEBUG" ]; then
+      debug(){
+        echo \$@ || true
+      }
+    else
+      debug(){
+        true
+      }
+    fi
+
+    # to reference this script's file
     self="\$(realpath \''${BASH_SOURCE[0]})"
+
+    # fingerprint will be inserted by builder
     fingerprint="_FINGERPRINT_PLACEHOLDER_"
 
-    debug(){
-      [ -n "\$NP_DEBUG" ] && echo \$@ || true
-    }
-
+    # user specified location for program files and nix store
     [ -z "\$NP_LOCATION" ] && NP_LOCATION="\$HOME"
     dir="\$NP_LOCATION/.nix-portable"
     mkdir -p \$dir/bin
 
-
-    ### setup SSL
-    # find ssl certs or use from nixpkgs
-    debug "figuring out ssl certs"
-    if [ -z "\$SSL_CERT_FILE" ]; then
-      debug "SSL_CERT_FILE not defined. trying to find certs automatically"
-      if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
-        debug "found /etc/ssl/certs/ca-bundle.crt"
-        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
-      elif [ ! -e /etc/ssl/certs ]; then
-        debug "/etc/ssl/certs does not exist, using certs from nixpkgs"
-        export SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt
-      else
-        debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
-      fi
+    # the fingerprint being present inside a file indicates that
+    # this version of nix-portable has already been initialized
+    if test -e \$dir/conf/fingerprint && [ "\$(cat \$dir/conf/fingerprint)" == "\$fingerprint" ]; then
+      newNPVersion=false
+    else
+      newNPVersion=true
     fi
 
+    # Nix portable ships its own nix.conf
+    export NIX_CONF_DIR=\$dir/conf/
 
-    ### install binaries
-    if test -e \$dir/fingerprint && [ "\$(cat \$dir/fingerprint)" == "\$fingerprint" ]; then
+
+    create_nix_conf(){
+      sandbox=\$1
+
+      mkdir -p \$dir/conf/
+      rm -f \$dir/conf/nix.conf
+
+      echo "build-users-group = " > \$dir/conf/nix.conf
+      echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
+      echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
+      echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
+
+      echo "sandbox = \$sandbox" >> \$dir/conf/nix.conf
+    }
+
+
+    ### install files
+
+    PATH_OLD="\$PATH"
+
+    # as soon as busybox is unpacked, restrict PATH to busybox to ensure reproducibility of this script
+    # only unpack binaries if necessary
+    if [ "\$newNPVersion" == "false" ]; then
+
       debug "binaries already installed"
+      export PATH="\$dir/busybox/bin"
+
     else
-      debug "installing binaries"
+
+      debug "installing files"
+
+      mkdir -p \$dir/emptyroot
 
       # install busybox
       mkdir -p \$dir/busybox/bin
@@ -125,32 +154,92 @@ let
         [ ! -e "\$dir/busybox/bin/\$bin" ] && ln -s busybox "\$dir/busybox/bin/\$bin"
       done
 
+      export PATH="\$dir/busybox/bin"
+
       # install other binaries
-      ${installBinBase64 zstd "zstd"}
+      ${installBin zstd "zstd"}
       ${installBin proot "proot"}
       ${installBin bwrap "bwrap"}
-      ${installBin zstd "zstd"}
 
-      # save fingerprint
-      echo -n "\$fingerprint" > "\$dir/fingerprint"
+      # install ssl cert bundle
+      unzip -poj "\$self" ${ lib.removePrefix "/" "${caBundleZstd}"} | \$dir/bin/zstd -d > \$dir/ca-bundle.crt
+
+      create_nix_conf false
+
     fi
 
 
-    ### add busybox to PATH
-    export PATH="\$PATH:\$dir/busybox/bin"
 
-
-    ### gather paths to bind for proot
-    paths="\$(find / -mindepth 1 -maxdepth 1 -not -name etc)"
-    paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
-    toBind=""
-    mkdir -p \$dir/shared-files
-    for p in \$paths; do
-      if [ -e "\$p" ]; then
-        real=\$(realpath \$p)
-        [ -e "\$real" ] && toBind="\$toBind \$real \$p"
+    ### setup SSL
+    # find ssl certs or use from nixpkgs
+    debug "figuring out ssl certs"
+    if [ -z "\$SSL_CERT_FILE" ]; then
+      debug "SSL_CERT_FILE not defined. trying to find certs automatically"
+      if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
+        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
+        debug "found /etc/ssl/certs/ca-bundle.crt which is a symlink to \$SSL_CERT_FILE"
+      elif [ -e /etc/ssl/certs/ca-certificates.crt ]; then
+        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-certificates.crt)
+        debug "found /etc/ssl/certs/ca-certificates.crt which is a symlink to \$SSL_CERT_FILE"
+      elif [ ! -e /etc/ssl/certs ]; then
+        debug "/etc/ssl/certs does not exist. Will use certs from nixpkgs."
+        export SSL_CERT_FILE=\$dir/ca-bundle.crt
+      else
+        debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
       fi
-    done
+    fi
+    if [ -n "\$SSL_CERT_FILE" ]; then
+      sslBind="\$SSL_CERT_FILE"
+    else
+      sslBind=/etc/ssl
+    fi
+
+
+
+    ### detecting existing git installation
+    if [ -n "\$NP_MINIMAL" ]; then
+      doInstallGit=false
+    else
+      if ! (PATH="\$PATH_OLD:\$PATH" which git &>/dev/null) ; then
+        doInstallGit=true
+      else
+        doInstallGit=false
+        # bind the old git to \$NP_LOCATION/.nix-portable/git/bin
+        gitBind="\$(dirname \$(realpath \$(PATH="\$PATH_OLD:\$PATH" which git))) \$NP_LOCATION/.nix-portable/git/bin"
+      fi
+    fi
+
+
+
+    collectProotBinds(){
+      ### gather paths to bind for proot
+      # we cannot bind / to / without running into a lot of trouble, therefore
+      # we need to collect all top level directories and bind them inside an empty root
+      paths="\$(find / -mindepth 1 -maxdepth 1 -not -name etc)"
+      paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
+
+      toBind=""
+      for p in \$paths; do
+        if [ -e "\$p" ]; then
+          real=\$(realpath \$p)
+          [ -e "\$real" ] && toBind="\$toBind \$real \$p"
+        fi
+      done
+
+      toBind="\$toBind \$gitBind"
+    }
+
+    collectBwrapBinds(){
+      toBind=""
+      # if we're on a nixos, the /bin/sh symlink will point
+      # to a /nix/store path which doesn't exit inside the wrapped env
+      # we fix this by binding busybox/bin to /bin
+      if test -s /bin/sh && [[ "\$(realpath /bin/sh)" == /nix/store/* ]]; then
+        toBind="\$toBind \$dir/busybox/bin /bin"
+      fi
+
+      toBind="\$toBind \$gitBind"
+    }
 
     makeBindArgs(){
       arg=\$1; shift
@@ -168,17 +257,18 @@ let
     }
 
 
+
     ### select container runtime
     debug "figuring out which runtime to use"
-    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(which bwrap 2>/dev/null) || true
+    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>/dev/null) || true
     [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$dir/bin/bwrap
     debug "bwrap executable: \$NP_BWRAP"
-    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(which proot 2>/dev/null) || true
+    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>/dev/null) || true
     [ -z "\$NP_PROOT" ] && NP_PROOT=\$dir/bin/proot
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$NP_BWRAP --bind / / --bind \$dir/busybox/bin/busybox "\$HOME/.nix-portable/true" "\$HOME/.nix-portable/true" 2>/dev/null ; then
+      if \$NP_BWRAP --bind / / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$HOME/.nix-portable/true" "\$HOME/.nix-portable/true" 2>/dev/null ; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -188,43 +278,29 @@ let
     else
       debug "runtime selected via NP_RUNTIME : \$NP_RUNTIME"
     fi
-    mkdir -p \$dir/emptyroot
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
-      # makeBindArgs --bind " " \$toBind
-      if [ -n "\$SSL_CERT_FILE" ]; then
-        makeBindArgs --bind " " \$SSL_CERT_FILE \$SSL_CERT_FILE
-      fi
+      collectBwrapBinds
+      makeBindArgs --bind " " \$toBind \$sslBind \$sslBind
       run="\$NP_BWRAP \$BWRAP_ARGS \\
         --bind / /\\
         --dev-bind /dev /dev\\
         --bind \$dir/ /nix\\
         \$binds"
+        # --bind \$dir/busybox/bin/busybox /bin/sh\\
     else
+      # proot
+      collectProotBinds
       makeBindArgs -b ":" \$toBind
-      binds_1="\$binds"
-      if [ -n "\$SSL_CERT_FILE" ]; then
-        debug "creating bind args for \$SSL_CERT_FILE"
-        makeBindArgs -b ":" \$SSL_CERT_FILE \$SSL_CERT_FILE
-      else
-        debug "creating bind args for /etc/ssl"
-        makeBindArgs -b ":" /etc/ssl /etc/ssl
-      fi
-      binds="\$binds_1 \$binds"
+      bindsAll="\$binds"
+      makeBindArgs -b ":" \$sslBind \$sslBind
+      binds="\$bindsAll \$binds"
       run="\$NP_PROOT \$PROOT_ARGS\\
-        -R \$dir/emptyroot
-        -b \$dir/store:/nix/store
+        -R \$dir/emptyroot\\
+        -b \$dir/store:/nix/store\\
         \$binds"
+        # -b \$dir/busybox/bin/busybox:/bin/sh\\
     fi
 
-
-    ### generate nix config
-    mkdir -p \$dir/conf/
-    echo "build-users-group = " > \$dir/conf/nix.conf
-    echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
-    echo "sandbox = true" >> \$dir/conf/nix.conf
-    echo "sandbox-fallback = true" >> \$dir/conf/nix.conf
-    echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
-    export NIX_CONF_DIR=\$dir/conf/
 
 
     ### setup environment
@@ -237,8 +313,6 @@ let
     # Install all the nix store paths necessary for the current nix-portable version
     # We only unpack missing store paths from the tar archive.
     # xz must be in PATH
-    PATH_OLD="\$PATH"
-    PATH="\$dir/bin/:\$PATH"
     index="$(cat ${storeTar}/index)"
 
     export missing=\$(
@@ -250,42 +324,27 @@ let
     )
 
     if [ -n "\$missing" ]; then
+      debug "extracting missing store paths"
       (
         mkdir -p \$dir/tmp \$dir/store/
         rm -rf \$dir/tmp/*
         cd \$dir/tmp
         unzip -qqp "\$self" ${ lib.removePrefix "/" "${storeTar}/tar"} \
-         | tar -x --zstd \$missing --strip-components 2
+          | \$dir/bin/zstd -d \
+          | tar -x \$missing --strip-components 2
         mv \$dir/tmp/* \$dir/store/
       )
+      rm -rf \$dir/tmp
     fi
 
-    PATH="\$PATH_OLD"
-
     if [ -n "\$missing" ]; then
-      debug "loading new store paths"
+      debug "registering new store paths to DB"
       reg="$(cat ${storeTar}/closureInfo/registration)"
       cmd="\$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
       debug "running command: \$cmd"
       echo "\$reg" | \$cmd
     fi
 
-
-    ### install git via nix, if git not installed yet or git installation is in /nix path
-    if [ -z "\$NP_MINIMAL" ] && ( ! which git &>/dev/null || [[ "\$(realpath \$(which git))" == /nix/* ]] ); then
-      needGit=true
-    else
-      needGit=false
-    fi
-    debug "needGit: \$needGit"
-    if \$needGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
-      echo "Installing git. Disable this by setting 'NP_MINIMAL=1'"
-      \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
-        (import ${nixpkgsSrc} {}).git.out
-      "
-    else
-      debug "git already installed or not required"
-    fi
 
 
     ### select executable
@@ -308,20 +367,74 @@ let
     fi
 
 
+
+    ### check which runtime has been used previously
+    lastRuntime=\$(cat "\$dir/conf/last_runtime" 2>/dev/null) || true
+
+
+
+    ### check if nix is funtional with or without sandbox
+    # sandbox-fallback is not reliable: https://github.com/NixOS/nix/issues/4719
+    if [ "\$newNPVersion" == "true" ] || [ "\$lastRuntime" != "\$NP_RUNTIME" ]; then
+      nixBin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-build"
+      debug "Testing if nix can build stuff without sandbox"
+      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false &>/dev/null; then
+        echo "Fatal error: nix is unable to build packages"
+        exit 1
+      fi
+
+      debug "Testing if nix sandox is functional"
+      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true &>/dev/null; then
+        debug "Sandbox doesn't work -> disabling sandbox"
+        create_nix_conf false
+      else
+        debug "Sandboxed builds work -> enabling sandbox"
+        create_nix_conf true
+      fi
+
+    fi
+
+
+    ### save fingerprint and lastRuntime
+    if [ "\$newNPVersion" == "true" ]; then
+      echo -n "\$fingerprint" > "\$dir/conf/fingerprint"
+    fi
+    if [ "\$lastRuntime" != \$NP_RUNTIME ]; then
+      echo -n \$NP_RUNTIME > "\$dir/conf/last_runtime"
+    fi
+
+
+
     ### set PATH
-    # add git
-    \$needGit && export PATH="\$PATH:${git.out}/bin"
+    # restore original PATH and append busybox
+    export PATH="\$PATH_OLD:\$dir/busybox/bin"
+
+
+
+    ### install git via nix, if git not installed or git installation is in /nix path
+    if \$doInstallGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
+      echo "Installing git because it's missing. Disable this by setting 'NP_MINIMAL=1'"
+      \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
+        (import ${nixpkgsSrc} {}).git.out
+      "
+    else
+      debug "git already installed or not required"
+    fi
+
+    # add git if necessary
+    \$doInstallGit && export PATH="\$PATH:${git.out}/bin"
+
 
 
     ### run commands
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
     if [ "\$NP_RUNTIME" == "proot" ]; then
       debug "running command: \$NP_RUN \$bin \$@"
-      exec  \$NP_RUN \$bin "\$@"
+      exec \$NP_RUN \$bin "\$@"
     else
       cmd="\$NP_RUN \$bin \$@"
       debug "running command: \$cmd"
-      exec  \$cmd
+      exec \$NP_RUN \$bin "\$@"
     fi
   '';
 
@@ -351,6 +464,7 @@ let
     $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
     $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
     $zip $out/bin/nix-portable.zip ${storeTar}/tar
+    $zip $out/bin/nix-portable.zip ${caBundleZstd}
 
     # create fingerprint
     fp=$(sha256sum $out/bin/nix-portable.zip | cut -d " "  -f 1)

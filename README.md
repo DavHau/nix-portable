@@ -1,7 +1,7 @@
 ## Nix Portable
 Nix - Static, Permissionless, Installation-free, Pre-configured
 
-Nix as a single binary which works without previous installation/configuration and without super user privileges or user namespaces.
+Nix as a single binary which doesn't require any configuration, privileges, or namespaces.
 
 ### Goals:
   - make it extremely simple to install nix
@@ -9,23 +9,36 @@ Nix as a single binary which works without previous installation/configuration a
   - be able to use the official binary cache (by simulating the /nix/store)
   - make it easy to distribute nix (via other package managers)
 
-### Systems confirmed working (Please add yours via PR):
-  - CentOS 7
-  - Debian (in docker)
-  - NixOS
+### Tested on the following systems/environments:
+  * Distros:
+    - Arch Linux
+    - Debian 10
+    - CentOS 7
+    - CentOS 8
+    - NixOS
+    - Ubuntu 20.04
+  * Other Environments:
+    - Docker (debian image)
+    - Github Action
 
 ### Under the hood:
-  - the nix-portable binary is a self extracting archive, caching its contents under $HOME/.nix-portable
-  - either bublewrap (bwrap) or proot is used to simulate the /nix/store directory which actually resides in $HOME/.nix-portable/store
-  - a default nixpkgs channel is included and the NIX_PATH variable is set accordingly.
-  - nix version 2.4 is used and configured to enable `flakes` and `nix-command` out of the box.
+  - The nix-portable binary is a self extracting archive, caching its contents in $HOME/.nix-portable
+  - Either bublewrap or proot is used to simulate the /nix/store directory which actually resides in $HOME/.nix-portable/store
+  - A default nixpkgs channel is included and the NIX_PATH variable is set accordingly.
+  - Nix version 2.4 is used and configured to enable `flakes` and `nix-command` out of the box.
+
+
+### Drawbacks / Considerations:
+If user namespaces are not available on a system, nix-portable will fall back to using proot instead of bubblewrap.
+Proot's virtualization can have a significant performance overhead depending on the workload.
+In that situation, it might be beneficial to use a remote builder or alternatively build the derivations on another host and sync them via a cache like cachix.org.
 
 
 ### Missing Features:
   - managing nix profiles via `nix-env`
   - managing nix channels via `nix-channel`
-  - MacOS
-  - support other architecutres than x86_64 
+  - support MacOS
+  - support other architecutres besides x86_64 
 
 
 ### Executing nix-portable
@@ -66,14 +79,14 @@ nix-portable will try to figure out which runtime is best for your system.
 In case the automatically selected runtime doesn't work, use the follwing environment variables to specify the runtime, but pleaae also open an issue, so we can improve the automatic selection.
 
 ### Environmant Variables
-The following environment variables are optional and can be used to override the default behaviour of running nix-portable
+The following environment variables are optional and can be used to override the default behaviour of nix-portable
 ```
-NP_DEBUG      enable debug logging (to stdout)
+NP_DEBUG      (1 = debug msgs; 2 = 'set -e' for nix-portable)
 NP_MINIMAL    do not automatically install git
 NP_LOCATION   where to put the `.nix-portable` dir. (defaults to `$HOME`)
-NP_RUNTIME    which runtime to use (must be either 'bwrap' or 'proot') 
-NP_BWRAP      specify the path to the bwrap executable
-NP_PROOT      specify the path to the proot executable
+NP_RUNTIME    which runtime to use (must be 'bwrap' or 'proot') 
+NP_BWRAP      specify the path to the bwrap executable to use
+NP_PROOT      specify the path to the proot executable to use
 NP_RUN        override the complete command to run nix
               (to use an unsupported runtime, or for debugging)
               nix will then be executed like: $NP_RUN {nix-binary} {args...}
