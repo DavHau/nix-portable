@@ -45,7 +45,7 @@
       };
 
       commandsToTest = [
-        "nix build --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'"
+        "nix build -L --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'"
         "nix-shell -p hello --run hello"
       ];
     
@@ -113,36 +113,50 @@
                     privKey=${./testing}/id_ed25519
                     nixPortable=${packages.nix-portable}/bin/nix-portable
                     ssh="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no test@localhost"
+                    sshRoot="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no root@localhost"
 
-                    cat $img > /tmp/img
+                    setup_and_start_vm() {
+                      cat $img > /tmp/img
+                      
+                      ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/img \
+                        --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
+                        --run-command 'ssh-keygen -A' \
+                        --ssh-inject test:file:$pubKey \
+                        --ssh-inject root:file:$pubKey \
+                        --copy-in $nixPortable:/home/test/ \
+                        ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
+                        ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
+                        --selinux-relabel
 
-                    ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/img \
-                      --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
-                      --run-command 'ssh-keygen -A' \
-                      --ssh-inject test:file:$pubKey \
-                      --copy-in $nixPortable:/ \
-                      ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
-                      ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
-                      --selinux-relabel
+                      ${pkgs.qemu}/bin/qemu-system-x86_64 \
+                        -hda /tmp/img \
+                        -m 2048 \
+                        -netdev user,hostfwd=tcp::10022-:22,id=n1 \
+                        -device virtio-net-pci,netdev=n1 \
+                        ${optionalString (! debug) "-nographic"} \
+                        &
+                    }
 
-                    ${pkgs.qemu}/bin/qemu-system-x86_64 \
-                      -hda /tmp/img \
-                      -m 2048 \
-                      -netdev user,hostfwd=tcp::10022-:22,id=n1 \
-                      -device virtio-net-pci,netdev=n1 \
-                      ${optionalString (! debug) "-nographic"} \
-                      &
+                    # if debug, dont init/run VM if already running
+                    ${optionalString debug ''
+                      ${pkgs.busybox}/bin/pgrep qemu >/dev/null || setup_and_start_vm
+                    ''}
 
                     while ! $ssh -o ConnectTimeout=2 true 2>/dev/null ; do
                       echo "waiting for ssh"
                       sleep 1
                     done
 
+                    ${optionalString debug ''
+                      $sshRoot "rm -rf /home/test/.nix-portable /home/test/nix-portable"
+                      scp -P 10022 -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+                    ''}
+
                     echo -e "\n\nstarting to test nix-portable"
 
                     # test some nix commands
                     ${concatStringsSep "\n" (map (cmd:
-                      ''$ssh "NP_DEBUG=1 NP_MINIMAL=1 /nix-portable ${cmd}"''
+                      ''$ssh "NP_DEBUG=1 NP_MINIMAL=1 /home/test/nix-portable ${cmd}"''
                     ) commandsToTest)}
 
                     echo "all tests succeeded"
