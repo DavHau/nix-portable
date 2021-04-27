@@ -198,7 +198,6 @@ let
 
 
     ### detecting existing git installation
-    # if [ -z "\$NP_MINIMAL" ] && ( ! which git &>/dev/null || [[ "\$(realpath \$(which git))" == /nix/* ]] ); then
     if [ -n "\$NP_MINIMAL" ]; then
       doInstallGit=false
     else
