@@ -85,7 +85,7 @@ let
       }
     else
       debug(){
-        exit 0
+        true
       }
     fi
 
@@ -160,7 +160,6 @@ let
       ${installBin zstd "zstd"}
       ${installBin proot "proot"}
       ${installBin bwrap "bwrap"}
-      ${installBin zstd "zstd"}
 
       # install ssl cert bundle
       unzip -poj "\$self" ${ lib.removePrefix "/" "${caBundleZstd}"} | \$dir/bin/zstd -d > \$dir/ca-bundle.crt
