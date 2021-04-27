@@ -45,7 +45,11 @@
       };
 
       commandsToTest = [
+        # test git
+        ''nix eval --impure --expr 'builtins.fetchGit {url="https://github.com/davhau/nix-portable"; rev="7ebf4ca972c6613983b2698ab7ecda35308e9886";}' ''
+        # test importing <nixpkgs> and building hello works
         "nix build -L --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'"
+        # test running a program from the nix store
         "nix-shell -p hello --run hello"
       ];
     
@@ -128,9 +132,10 @@
                         ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
                         --selinux-relabel
 
-                      ${pkgs.qemu}/bin/qemu-system-x86_64 \
+                      ${pkgs.qemu}/bin/qemu-kvm \
                         -hda /tmp/img \
                         -m 2048 \
+                        -cpu max \
                         -netdev user,hostfwd=tcp::10022-:22,id=n1 \
                         -device virtio-net-pci,netdev=n1 \
                         ${optionalString (! debug) "-nographic"} \
@@ -139,7 +144,7 @@
 
                     # if debug, dont init/run VM if already running
                     ${optionalString debug ''
-                      ${pkgs.busybox}/bin/pgrep qemu >/dev/null || \\
+                      ${pkgs.busybox}/bin/pgrep qemu >/dev/null || \
                     ''}
                       setup_and_start_vm
 
@@ -149,15 +154,16 @@
                     done
 
                     ${optionalString debug ''
-                      $sshRoot "rm -rf /home/test/.nix-portable /home/test/nix-portable"
+                      $sshRoot "rm -rf /home/test/nix-portable"
                       scp -P 10022 -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
                     ''}
 
                     echo -e "\n\nstarting to test nix-portable"
 
                     # test some nix commands
+                    NP_DEBUG=''${NP_DEBUG:-1}
                     ${concatStringsSep "\n" (map (cmd:
-                      ''$ssh "NP_DEBUG=1 NP_MINIMAL=1 /home/test/nix-portable ${cmd}"''
+                      ''$ssh "NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
                     ) commandsToTest)}
 
                     echo "all tests succeeded"
@@ -173,16 +179,29 @@
             job-docker-debian.program = toString (pkgs.writeScript "job-docker-debian" ''
               #!/usr/bin/env bash
               set -e
-              DOCKER_CMD="''${DOCKER_CMD:-docker}"
+              export NP_DEBUG=''${NP_DEBUG:-1}
               baseCmd="\
                 $DOCKER_CMD run -i --rm \
                   -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
-                  -e NP_MINIMAL=1 \
-                  -e NP_DEBUG=1"
+                  -e NP_DEBUG \
+                  -e NP_MINIMAL"
+              ${concatStringsSep "\n" (map (cmd: "$baseCmd debian /nix-portable ${cmd}") commandsToTest)}
+            '');
+            job-docker-debian-debug.type = "app";
+            job-docker-debian-debug.program = toString (pkgs.writeScript "job-docker-debian-debug" ''
+              #!/usr/bin/env bash
+              set -e
+              DOCKER_CMD="''${DOCKER_CMD:-docker}"
+              export NP_DEBUG=${NP_DEBUG:-1}
+              baseCmd="\
+                $DOCKER_CMD run -i --rm \
+                  -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
+                  -e NP_DEBUG \
+                  -e NP_MINIMAL"
               if [ -n "$1" ]; then
                 $baseCmd -it debian $1
               else
-                ${concatStringsSep "\n" (map (cmd: "$baseCmd debian /nix-portable ${cmd}") commandsToTest)}
+                ${concatStringsSep "\n" (map (cmd: "$baseCmd -it debian /nix-portable ${cmd}") commandsToTest)}
               fi
             '');
             job-local.type = "app";
@@ -190,7 +209,6 @@
               #!/usr/bin/env bash
               set -e
               export NP_DEBUG=1
-              export NP_MINIMAL=1
               ${concatStringsSep "\n" (map (cmd:
                 ''${packages.nix-portable}/bin/nix-portable ${cmd}''
               ) commandsToTest)}

@@ -79,14 +79,18 @@ let
       set -x
     fi
 
-    if [ -n "\$NP_DEBUG" ]; then
+    # &3 is our error out which we either forward to &2 or to /dev/null
+    # depending on the setting
+    if [ -n "\$NP_DEBUG" ] && [ "\$NP_DEBUG" -ge 1 ]; then
       debug(){
         echo \$@ || true
       }
+      exec 3>&2
     else
       debug(){
         true
       }
+      exec 3>/dev/null
     fi
 
     # to reference this script's file
@@ -189,7 +193,8 @@ let
       fi
     fi
     if [ -n "\$SSL_CERT_FILE" ]; then
-      sslBind="\$SSL_CERT_FILE"
+      sslBind="\$(realpath \$SSL_CERT_FILE) \$dir/ca-bundle.crt"
+      export SSL_CERT_FILE="\$dir/ca-bundle.crt"
     else
       sslBind=/etc/ssl
     fi
@@ -200,12 +205,15 @@ let
     if [ -n "\$NP_MINIMAL" ]; then
       doInstallGit=false
     else
-      if ! (PATH="\$PATH_OLD:\$PATH" which git &>/dev/null) ; then
+      existingGit="\$(PATH="\$PATH_OLD:\$PATH" which git 2>&3)" || existingGit=
+
+      # if git doesn't exist or if we're on a nixos, we need to install git
+      # in the wrapped environment.
+      if [ -z "\$existingGit" ] || [[ "\$(realpath \$existingGit)" == /nix/store/* ]] ; then
         doInstallGit=true
       else
         doInstallGit=false
         # bind the old git to \$NP_LOCATION/.nix-portable/git/bin
-        gitBind="\$(dirname \$(realpath \$(PATH="\$PATH_OLD:\$PATH" which git))) \$NP_LOCATION/.nix-portable/git/bin"
       fi
     fi
 
@@ -225,8 +233,6 @@ let
           [ -e "\$real" ] && toBind="\$toBind \$real \$p"
         fi
       done
-
-      toBind="\$toBind \$gitBind"
     }
 
     collectBwrapBinds(){
@@ -237,8 +243,6 @@ let
       if test -s /bin/sh && [[ "\$(realpath /bin/sh)" == /nix/store/* ]]; then
         toBind="\$toBind \$dir/busybox/bin /bin"
       fi
-
-      toBind="\$toBind \$gitBind"
     }
 
     makeBindArgs(){
@@ -260,15 +264,15 @@ let
 
     ### select container runtime
     debug "figuring out which runtime to use"
-    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>/dev/null) || true
+    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>&3) || true
     [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$dir/bin/bwrap
     debug "bwrap executable: \$NP_BWRAP"
-    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>/dev/null) || true
+    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>&3) || true
     [ -z "\$NP_PROOT" ] && NP_PROOT=\$dir/bin/proot
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$NP_BWRAP --bind / / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$HOME/.nix-portable/true" "\$HOME/.nix-portable/true" 2>/dev/null ; then
+      if \$NP_BWRAP --bind / / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -280,7 +284,7 @@ let
     fi
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
       collectBwrapBinds
-      makeBindArgs --bind " " \$toBind \$sslBind \$sslBind
+      makeBindArgs --bind " " \$toBind \$sslBind
       run="\$NP_BWRAP \$BWRAP_ARGS \\
         --bind / /\\
         --dev-bind /dev /dev\\
@@ -290,16 +294,14 @@ let
     else
       # proot
       collectProotBinds
-      makeBindArgs -b ":" \$toBind
-      bindsAll="\$binds"
-      makeBindArgs -b ":" \$sslBind \$sslBind
-      binds="\$bindsAll \$binds"
+      makeBindArgs -b ":" \$toBind \$sslBind
       run="\$NP_PROOT \$PROOT_ARGS\\
         -R \$dir/emptyroot\\
         -b \$dir/store:/nix/store\\
         \$binds"
         # -b \$dir/busybox/bin/busybox:/bin/sh\\
     fi
+    debug "base command will be: \$run"
 
 
 
@@ -369,7 +371,7 @@ let
 
 
     ### check which runtime has been used previously
-    lastRuntime=\$(cat "\$dir/conf/last_runtime" 2>/dev/null) || true
+    lastRuntime=\$(cat "\$dir/conf/last_runtime" 2>&3) || true
 
 
 
@@ -378,13 +380,13 @@ let
     if [ "\$newNPVersion" == "true" ] || [ "\$lastRuntime" != "\$NP_RUNTIME" ]; then
       nixBin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-build"
       debug "Testing if nix can build stuff without sandbox"
-      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false &>/dev/null; then
+      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false >&3 2>&3; then
         echo "Fatal error: nix is unable to build packages"
         exit 1
       fi
 
       debug "Testing if nix sandox is functional"
-      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true &>/dev/null; then
+      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true >&3 2>&3; then
         debug "Sandbox doesn't work -> disabling sandbox"
         create_nix_conf false
       else
