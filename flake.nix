@@ -179,6 +179,7 @@
             job-docker-debian.program = toString (pkgs.writeScript "job-docker-debian" ''
               #!/usr/bin/env bash
               set -e
+              DOCKER_CMD="''${DOCKER_CMD:-docker}"
               export NP_DEBUG=''${NP_DEBUG:-1}
               baseCmd="\
                 $DOCKER_CMD run -i --rm \
