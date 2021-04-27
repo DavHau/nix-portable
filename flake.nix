@@ -139,8 +139,9 @@
 
                     # if debug, dont init/run VM if already running
                     ${optionalString debug ''
-                      ${pkgs.busybox}/bin/pgrep qemu >/dev/null || setup_and_start_vm
+                      ${pkgs.busybox}/bin/pgrep qemu >/dev/null || \\
                     ''}
+                      setup_and_start_vm
 
                     while ! $ssh -o ConnectTimeout=2 true 2>/dev/null ; do
                       echo "waiting for ssh"
@@ -171,21 +172,23 @@
             job-docker-debian.type = "app";
             job-docker-debian.program = toString (pkgs.writeScript "job-docker-debian" ''
               #!/usr/bin/env bash
-
+              set -e
               DOCKER_CMD="''${DOCKER_CMD:-docker}"
-
               baseCmd="\
                 $DOCKER_CMD run -i --rm \
                   -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
-                  -e "NP_MINIMAL=1" \
-                  -e "NP_DEBUG=1" \
-                  debian /nix-portable"
-              
-              ${concatStringsSep "\n" (map (cmd: "$baseCmd ${cmd}") commandsToTest)}
+                  -e NP_MINIMAL=1 \
+                  -e NP_DEBUG=1"
+              if [ -n "$1" ]; then
+                $baseCmd -it debian $1
+              else
+                ${concatStringsSep "\n" (map (cmd: "$baseCmd debian /nix-portable ${cmd}") commandsToTest)}
+              fi
             '');
             job-local.type = "app";
             job-local.program = toString (pkgs.writeScript "job-local" ''
               #!/usr/bin/env bash
+              set -e
               export NP_DEBUG=1
               export NP_MINIMAL=1
               ${concatStringsSep "\n" (map (cmd:

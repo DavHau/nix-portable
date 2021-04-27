@@ -75,11 +75,19 @@ let
     #!/usr/bin/env bash
 
     set -e
-    set -x
+    if [ -n "\$NP_DEBUG" ] && [ "\$NP_DEBUG" -ge 2 ]; then
+      set -x
+    fi
 
-    debug(){
-      [ -n "\$NP_DEBUG" ] && echo \$@ || true
-    }
+    if [ -n "\$NP_DEBUG" ]; then
+      debug(){
+        echo \$@ || true
+      }
+    else
+      debug(){
+        exit 0
+      }
+    fi
 
     # to reference this script's file
     self="\$(realpath \''${BASH_SOURCE[0]})"
@@ -372,14 +380,13 @@ let
     if [ "\$newNPVersion" == "true" ] || [ "\$lastRuntime" != "\$NP_RUNTIME" ]; then
       nixBin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-build"
       debug "Testing if nix can build stuff without sandbox"
-      if ! \$NP_RUN "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false &>/dev/null; then
+      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false; then
         echo "Fatal error: nix is unable to build packages"
         exit 1
       fi
 
       debug "Testing if nix sandox is functional"
-      sandbox=true
-      if ! \$NP_RUN "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true &>/dev/null; then
+      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true &>/dev/null; then
         debug "Sandbox doesn't work -> disabling sandbox"
         create_nix_conf false
       else
