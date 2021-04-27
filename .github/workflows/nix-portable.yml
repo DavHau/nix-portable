@@ -115,4 +115,4 @@ jobs:
         name: nix-portable
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}']
     
-    - run: nix run -L .#job-docker-debian
+    - run: nix run -L .#job-local
