@@ -75,6 +75,7 @@ let
     #!/usr/bin/env bash
 
     set -e
+    set -x
 
     debug(){
       [ -n "\$NP_DEBUG" ] && echo \$@ || true
@@ -91,9 +92,31 @@ let
     dir="\$NP_LOCATION/.nix-portable"
     mkdir -p \$dir/bin
 
+    # the fingerprint being present inside a file indicates that
+    # this version of nix-portable has already been initialized
+    if test -e \$dir/conf/fingerprint && [ "\$(cat \$dir/conf/fingerprint)" == "\$fingerprint" ]; then
+      newNPVersion=false
+    else
+      newNPVersion=true
+    fi
+
     # Nix portable ships its own nix.conf
     export NIX_CONF_DIR=\$dir/conf/
 
+
+    create_nix_conf(){
+      sandbox=\$1
+
+      mkdir -p \$dir/conf/
+      rm -f \$dir/conf/nix.conf
+
+      echo "build-users-group = " > \$dir/conf/nix.conf
+      echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
+      echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
+      echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
+
+      echo "sandbox = \$sandbox" >> \$dir/conf/nix.conf
+    }
 
 
     ### install files
@@ -102,7 +125,7 @@ let
 
     # as soon as busybox is unpacked, restrict PATH to busybox to ensure reproducibility of this script
     # only unpack binaries if necessary
-    if test -e \$dir/fingerprint && [ "\$(cat \$dir/fingerprint)" == "\$fingerprint" ]; then
+    if [ "\$newNPVersion" == "false" ]; then
 
       debug "binaries already installed"
       export PATH="\$dir/busybox/bin"
@@ -134,20 +157,10 @@ let
       # install ssl cert bundle
       unzip -poj "\$self" ${ lib.removePrefix "/" "${caBundleZstd}"} | \$dir/bin/zstd -d > \$dir/ca-bundle.crt
 
-      # create nix config
-      mkdir -p \$dir/conf/
+      create_nix_conf false
 
-      echo "build-users-group = " > \$dir/conf/nix.conf
-      echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
-      echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
-      echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
-
-      # disable sandbox until sandbox-fallback is fixed: https://github.com/NixOS/nix/issues/4719
-      echo "sandbox = false" >> \$dir/conf/nix.conf
-
-      # save fingerprint
-      echo -n "\$fingerprint" > "\$dir/fingerprint"
     fi
+
 
 
     ### setup SSL
@@ -175,6 +188,23 @@ let
     fi
 
 
+
+    ### detecting existing git installation
+    # if [ -z "\$NP_MINIMAL" ] && ( ! which git &>/dev/null || [[ "\$(realpath \$(which git))" == /nix/* ]] ); then
+    if [ -n "\$NP_MINIMAL" ]; then
+      doInstallGit=false
+    else
+      if ! (PATH="\$PATH_OLD:\$PATH" which git &>/dev/null) ; then
+        doInstallGit=true
+      else
+        doInstallGit=false
+        # bind the old git to \$NP_LOCATION/.nix-portable/git/bin
+        gitBind="\$(dirname \$(realpath \$(PATH="\$PATH_OLD:\$PATH" which git))) \$NP_LOCATION/.nix-portable/git/bin"
+      fi
+    fi
+
+
+
     collectProotBinds(){
       ### gather paths to bind for proot
       # we cannot bind / to / without running into a lot of trouble, therefore
@@ -189,18 +219,20 @@ let
           [ -e "\$real" ] && toBind="\$toBind \$real \$p"
         fi
       done
+
+      toBind="\$toBind \$gitBind"
     }
 
     collectBwrapBinds(){
       toBind=""
       # if we're on a nixos, the /bin/sh symlink will point
       # to a /nix/store path which doesn't exit inside the wrapped env
-      # we fix this with by binding exactly that path
+      # we fix this by binding busybox/bin to /bin
       if test -s /bin/sh && [[ "\$(realpath /bin/sh)" == /nix/store/* ]]; then
-        real="\$(realpath /bin/sh)"
-        target="\$(dirname \$real)"
-        toBind="\$toBind \$dir/busybox/bin \$target"
+        toBind="\$toBind \$dir/busybox/bin /bin"
       fi
+
+      toBind="\$toBind \$gitBind"
     }
 
     makeBindArgs(){
@@ -217,6 +249,7 @@ let
         fi
       done
     }
+
 
 
     ### select container runtime
@@ -263,6 +296,7 @@ let
     fi
 
 
+
     ### setup environment
     export NIX_PATH="\$dir/channels:nixpkgs=\$dir/channels/nixpkgs"
     mkdir -p \$dir/channels
@@ -294,6 +328,7 @@ let
           | tar -x \$missing --strip-components 2
         mv \$dir/tmp/* \$dir/store/
       )
+      rm -rf \$dir/tmp
     fi
 
     if [ -n "\$missing" ]; then
@@ -304,21 +339,6 @@ let
       echo "\$reg" | \$cmd
     fi
 
-
-    ### install git via nix, if git not installed yet or git installation is in /nix path
-    if [ -z "\$NP_MINIMAL" ] && ( ! which git &>/dev/null || [[ "\$(realpath \$(which git))" == /nix/* ]] ); then
-      needGit=true
-    else
-      needGit=false
-    fi
-    if \$needGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
-      echo "Installing git because it's missing. Disable this by setting 'NP_MINIMAL=1'"
-      \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
-        (import ${nixpkgsSrc} {}).git.out
-      "
-    else
-      debug "git already installed or not required"
-    fi
 
 
     ### select executable
@@ -341,11 +361,65 @@ let
     fi
 
 
+
+    ### check which runtime has been used previously
+    lastRuntime=\$(cat "\$dir/conf/last_runtime" 2>/dev/null) || true
+
+
+
+    ### check if nix is funtional with or without sandbox
+    # sandbox-fallback is not reliable: https://github.com/NixOS/nix/issues/4719
+    if [ "\$newNPVersion" == "true" ] || [ "\$lastRuntime" != "\$NP_RUNTIME" ]; then
+      nixBin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-build"
+      debug "Testing if nix can build stuff without sandbox"
+      if ! \$NP_RUN "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false &>/dev/null; then
+        echo "Fatal error: nix is unable to build packages"
+        exit 1
+      fi
+
+      debug "Testing if nix sandox is functional"
+      sandbox=true
+      if ! \$NP_RUN "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true &>/dev/null; then
+        debug "Sandbox doesn't work -> disabling sandbox"
+        create_nix_conf false
+      else
+        debug "Sandboxed builds work -> enabling sandbox"
+        create_nix_conf true
+      fi
+
+    fi
+
+
+    ### save fingerprint and lastRuntime
+    if [ "\$newNPVersion" == "true" ]; then
+      echo -n "\$fingerprint" > "\$dir/conf/fingerprint"
+    fi
+    if [ "\$lastRuntime" != \$NP_RUNTIME ]; then
+      echo -n \$NP_RUNTIME > "\$dir/conf/last_runtime"
+    fi
+
+
+
     ### set PATH
     # restore original PATH and append busybox
     export PATH="\$PATH_OLD:\$dir/busybox/bin"
+
+
+
+    ### install git via nix, if git not installed or git installation is in /nix path
+    if \$doInstallGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
+      echo "Installing git because it's missing. Disable this by setting 'NP_MINIMAL=1'"
+      \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
+        (import ${nixpkgsSrc} {}).git.out
+      "
+    else
+      debug "git already installed or not required"
+    fi
+
     # add git if necessary
-    \$needGit && export PATH="\$PATH:${git.out}/bin"
+    \$doInstallGit && export PATH="\$PATH:${git.out}/bin"
+
+
 
     ### run commands
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
