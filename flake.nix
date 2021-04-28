@@ -94,9 +94,11 @@
       (inp.flake-utils.lib.eachDefaultSystem (system: let pkgs = inp.nixpkgs.legacyPackages."${system}"; in rec {
         devShell = pkgs.mkShell {
           buildInputs = with pkgs; [
-            libguestfs-with-appliance
-            qemu
             bashInteractive
+            libguestfs-with-appliance
+            parallel
+            proot
+            qemu
           ];
         };
         packages.nix-portable = nixPortableForSystem { inherit system; };
@@ -112,17 +114,25 @@
                     #!/usr/bin/env bash
                     set -e
 
+                    if [ -n "$RAND_PORT" ]; then
+                      # derive ssh port number from os name, to gain ability to run this in parallel without collision
+                      osHash=$((0x"$(echo ${os} | sha256sum | cut -d " " -f 1)")) && [ "$r" -lt 0 ] && ((r *= -1))
+                      port=$(( ($osHash % 55535) + 10000 ))
+                    else
+                      port=10022
+                    fi
+
                     img=${fetchurl { inherit (testImages."${os}") url sha256 ;}}
                     pubKey=${./testing}/id_ed25519.pub
                     privKey=${./testing}/id_ed25519
                     nixPortable=${packages.nix-portable}/bin/nix-portable
-                    ssh="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no test@localhost"
-                    sshRoot="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no root@localhost"
+                    ssh="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no test@localhost"
+                    sshRoot="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no root@localhost"
 
                     setup_and_start_vm() {
-                      cat $img > /tmp/img
+                      cat $img > /tmp/${os}-img
                       
-                      ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/img \
+                      ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
                         --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
                         --run-command 'ssh-keygen -A' \
                         --ssh-inject test:file:$pubKey \
@@ -133,10 +143,10 @@
                         --selinux-relabel
 
                       ${pkgs.qemu}/bin/qemu-kvm \
-                        -hda /tmp/img \
-                        -m 2048 \
+                        -hda /tmp/${os}-img \
+                        -m 1500 \
                         -cpu max \
-                        -netdev user,hostfwd=tcp::10022-:22,id=n1 \
+                        -netdev user,hostfwd=tcp::$port-:22,id=n1 \
                         -device virtio-net-pci,netdev=n1 \
                         ${optionalString (! debug) "-nographic"} \
                         &
@@ -155,7 +165,7 @@
 
                     ${optionalString debug ''
                       $sshRoot "rm -rf /home/test/nix-portable"
-                      scp -P 10022 -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+                      scp -P $port -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
                     ''}
 
                     echo -e "\n\nstarting to test nix-portable"
@@ -175,6 +185,16 @@
           makeQemuPipelines true // makeQemuPipelines false
           # add 
           // {
+            job-qemu-all.type = "app";
+            job-qemu-all.program = let
+              jobs = (mapAttrsToList (n: v: v.program) (filterAttrs (n: v: 
+                hasPrefix "job-qemu" n && ! hasSuffix "debug" n && ! hasSuffix "all" n
+              ) apps));
+            in
+              toString (pkgs.writeScript "job-docker-debian" ''
+                #!/usr/bin/env bash
+                RAND_PORT=y ${pkgs.parallel}/bin/parallel bash ::: ${toString jobs}
+              '');
             job-docker-debian.type = "app";
             job-docker-debian.program = toString (pkgs.writeScript "job-docker-debian" ''
               #!/usr/bin/env bash
@@ -209,7 +229,7 @@
             job-local.program = toString (pkgs.writeScript "job-local" ''
               #!/usr/bin/env bash
               set -e
-              export NP_DEBUG=1
+              export NP_DEBUG=''${NP_DEBUG:-1}
               ${concatStringsSep "\n" (map (cmd:
                 ''${packages.nix-portable}/bin/nix-portable ${cmd}''
               ) commandsToTest)}
