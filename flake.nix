@@ -155,7 +155,6 @@
                           --run-command 'ssh-keygen -A' \
                           --ssh-inject test:file:$pubKey \
                           --ssh-inject root:file:$pubKey \
-                          --copy-in $nixPortable:/home/test/ \
                           ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
                           ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
                           --selinux-relabel
@@ -182,10 +181,9 @@
                       sleep 1
                     done
 
-                    ${optionalString debug ''
-                      $sshRoot "rm -rf /home/test/nix-portable"
-                      scp -P $port -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
-                    ''}
+                    # upload the nix-portable executable
+                    ${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+
 
                     echo -e "\n\nstarting to test nix-portable"
 
