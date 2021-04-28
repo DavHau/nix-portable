@@ -40,10 +40,11 @@
           excludeRuntimes = [ "bwrap" ];
         };
         nixos = {
+          # use iso image for nixos because building a qcow2 would require KVM
           img = (toString (nixosSystem {
             system = "x86_64-linux";
-            modules = [(import ./testing/nixos-qcow2.nix)];
-          }).config.system.build.qcow) + "/nixos.qcow2";
+            modules = [(import ./testing/nixos-iso.nix)];
+          }).config.system.build.isoImage) + "/iso/nixos.iso";
         };
         ubuntu = {
           url = "https://cloud-images.ubuntu.com/focal/20210415/focal-server-cloudimg-amd64.img";
