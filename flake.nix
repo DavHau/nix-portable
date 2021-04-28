@@ -36,6 +36,14 @@
         debian = {
           url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
           sha256 = "0mf9k3pgzighibly1sy3cjq7c761r3akp8mlgd878lwf006vqrky";
+          # permissions for user namespaces not enabled by default
+          excludeRuntimes = [ "bwrap" ];
+        };
+        nixos = {
+          img = (toString (nixosSystem {
+            system = "x86_64-linux";
+            modules = [(import ./testing/nixos-qcow2.nix)];
+          }).config.system.build.qcow) + "/nixos.qcow2";
         };
         ubuntu = {
           url = "https://cloud-images.ubuntu.com/focal/20210415/focal-server-cloudimg-amd64.img";
@@ -111,6 +119,9 @@
           let
             makeQemuPipelines = debug: mapAttrs' (os: img: let
               runtimes = filter (runtime: ! elem runtime (testImages."${os}".excludeRuntimes or []) ) [ "bwrap" "proot" ];
+              img =
+                if testImages."${os}" ? img then testImages."${os}".img
+                else fetchurl { inherit (testImages."${os}") url sha256 ;};
             in
               nameValuePair
                 "job-qemu-${os}${optionalString debug "-debug"}"
@@ -128,7 +139,7 @@
                       port=10022
                     fi
 
-                    img=${fetchurl { inherit (testImages."${os}") url sha256 ;}}
+                    img=${img}
                     pubKey=${./testing}/id_ed25519.pub
                     privKey=${./testing}/id_ed25519
                     nixPortable=${packages.nix-portable}/bin/nix-portable
@@ -138,15 +149,17 @@
                     setup_and_start_vm() {
                       cat $img > /tmp/${os}-img
                       
-                      ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
-                        --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
-                        --run-command 'ssh-keygen -A' \
-                        --ssh-inject test:file:$pubKey \
-                        --ssh-inject root:file:$pubKey \
-                        --copy-in $nixPortable:/home/test/ \
-                        ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
-                        ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
-                        --selinux-relabel
+                      if [ "${os}" != "nixos" ]; then
+                        ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
+                          --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
+                          --run-command 'ssh-keygen -A' \
+                          --ssh-inject test:file:$pubKey \
+                          --ssh-inject root:file:$pubKey \
+                          --copy-in $nixPortable:/home/test/ \
+                          ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
+                          ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
+                          --selinux-relabel
+                      fi
 
                       ${pkgs.qemu}/bin/qemu-kvm \
                         -hda /tmp/${os}-img \
