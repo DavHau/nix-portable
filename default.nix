@@ -181,10 +181,10 @@ let
       debug "SSL_CERT_FILE not defined. trying to find certs automatically"
       if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
         export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
-        debug "found /etc/ssl/certs/ca-bundle.crt which is a symlink to \$SSL_CERT_FILE"
+        debug "found /etc/ssl/certs/ca-bundle.crt with real path \$SSL_CERT_FILE"
       elif [ -e /etc/ssl/certs/ca-certificates.crt ]; then
         export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-certificates.crt)
-        debug "found /etc/ssl/certs/ca-certificates.crt which is a symlink to \$SSL_CERT_FILE"
+        debug "found /etc/ssl/certs/ca-certificates.crt with real path \$SSL_CERT_FILE"
       elif [ ! -e /etc/ssl/certs ]; then
         debug "/etc/ssl/certs does not exist. Will use certs from nixpkgs."
         export SSL_CERT_FILE=\$dir/ca-bundle.crt
@@ -223,7 +223,7 @@ let
       ### gather paths to bind for proot
       # we cannot bind / to / without running into a lot of trouble, therefore
       # we need to collect all top level directories and bind them inside an empty root
-      paths="\$(find / -mindepth 1 -maxdepth 1 -not -name etc)"
+      paths="\$(find / -mindepth 1 -maxdepth 1)"
       paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
 
       toBind=""
@@ -264,10 +264,10 @@ let
 
     ### select container runtime
     debug "figuring out which runtime to use"
-    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>&3) || true
+    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>/dev/null) || true
     [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$dir/bin/bwrap
     debug "bwrap executable: \$NP_BWRAP"
-    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>&3) || true
+    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>/dev/null) || true
     [ -z "\$NP_PROOT" ] && NP_PROOT=\$dir/bin/proot
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
