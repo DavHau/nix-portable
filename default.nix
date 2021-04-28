@@ -207,36 +207,64 @@ let
     else
       existingGit="\$(PATH="\$PATH_OLD:\$PATH" which git 2>&3)" || existingGit=
 
-      # if git doesn't exist or if we're on a nixos, we need to install git
-      # in the wrapped environment.
+      # if git doesn't exist or resides in /nix/store/*, we need to install git
+      # inside the wrapped environment.
       if [ -z "\$existingGit" ] || [[ "\$(realpath \$existingGit)" == /nix/store/* ]] ; then
         doInstallGit=true
       else
         doInstallGit=false
-        # bind the old git to \$NP_LOCATION/.nix-portable/git/bin
       fi
     fi
 
 
 
-    collectProotBinds(){
+    storePathOfFile(){
+      file=\$(realpath \$1)
+      sPath="\$(echo \$file | awk -F "/" 'BEGIN{OFS="/";}{print \$2,\$3,\$4}')"
+      echo "/\$sPath"
+    }
+
+
+    collectBinds(){
       ### gather paths to bind for proot
       # we cannot bind / to / without running into a lot of trouble, therefore
       # we need to collect all top level directories and bind them inside an empty root
-      paths="\$(find / -mindepth 1 -maxdepth 1)"
-      paths="\$paths /etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime $HOME"
+      pathsTopLevel="\$(find / -mindepth 1 -maxdepth 1 -not -name nix -not -name dev)"
+
 
       toBind=""
+      for p in \$pathsTopLevel; do
+        if [ -e "\$p" ]; then
+          real=\$(realpath \$p)
+          if [ -e "\$real" ]; then
+            if [[ "\$real" == /nix/store/* ]]; then
+              storePath=\$(storePathOfFile \$real)
+              toBind="\$toBind \$storePath \$storePath"
+            else
+              toBind="\$toBind \$real \$p"
+            fi
+          fi
+        fi
+      done
+
+
+      # TODO: add /var/run/dbus/system_bus_socket
+      paths="/etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime \$HOME"
+
       for p in \$paths; do
         if [ -e "\$p" ]; then
           real=\$(realpath \$p)
-          [ -e "\$real" ] && toBind="\$toBind \$real \$p"
+          if [ -e "\$real" ]; then
+            if [[ "\$real" == /nix/store/* ]]; then
+              storePath=\$(storePathOfFile \$real)
+              toBind="\$toBind \$storePath \$storePath"
+            else
+              toBind="\$toBind \$real \$real"
+            fi
+          fi
         fi
       done
-    }
 
-    collectBwrapBinds(){
-      toBind=""
       # if we're on a nixos, the /bin/sh symlink will point
       # to a /nix/store path which doesn't exit inside the wrapped env
       # we fix this by binding busybox/bin to /bin
@@ -244,6 +272,7 @@ let
         toBind="\$toBind \$dir/busybox/bin /bin"
       fi
     }
+
 
     makeBindArgs(){
       arg=\$1; shift
@@ -272,7 +301,7 @@ let
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$NP_BWRAP --bind / / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
+      if \$NP_BWRAP --bind \$dir/emptyroot / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -283,20 +312,21 @@ let
       debug "runtime selected via NP_RUNTIME : \$NP_RUNTIME"
     fi
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
-      collectBwrapBinds
+      collectBinds
       makeBindArgs --bind " " \$toBind \$sslBind
       run="\$NP_BWRAP \$BWRAP_ARGS \\
-        --bind / /\\
+        --bind \$dir/emptyroot /\\
         --dev-bind /dev /dev\\
         --bind \$dir/ /nix\\
         \$binds"
         # --bind \$dir/busybox/bin/busybox /bin/sh\\
     else
       # proot
-      collectProotBinds
+      collectBinds
       makeBindArgs -b ":" \$toBind \$sslBind
       run="\$NP_PROOT \$PROOT_ARGS\\
-        -R \$dir/emptyroot\\
+        -r \$dir/emptyroot\\
+        -b /dev:/dev\\
         -b \$dir/store:/nix/store\\
         \$binds"
         # -b \$dir/busybox/bin/busybox:/bin/sh\\

@@ -26,6 +26,8 @@
         centos7 = {
           url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
           sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
+          # user namespaces are disabled on centos 7
+          excludeRuntimes = [ "bwrap" ];
         };
         centos8 = {
           url = "https://cloud.centos.org/altarch/8/x86_64/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2";
@@ -34,6 +36,15 @@
         debian = {
           url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
           sha256 = "0mf9k3pgzighibly1sy3cjq7c761r3akp8mlgd878lwf006vqrky";
+          # permissions for user namespaces not enabled by default
+          excludeRuntimes = [ "bwrap" ];
+        };
+        nixos = {
+          # use iso image for nixos because building a qcow2 would require KVM
+          img = (toString (nixosSystem {
+            system = "x86_64-linux";
+            modules = [(import ./testing/nixos-iso.nix)];
+          }).config.system.build.isoImage) + "/iso/nixos.iso";
         };
         ubuntu = {
           url = "https://cloud-images.ubuntu.com/focal/20210415/focal-server-cloudimg-amd64.img";
@@ -48,10 +59,12 @@
         # test git
         ''nix eval --impure --expr 'builtins.fetchGit {url="https://github.com/davhau/nix-portable"; rev="7ebf4ca972c6613983b2698ab7ecda35308e9886";}' ''
         # test importing <nixpkgs> and building hello works
-        "nix build -L --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'"
+        ''nix build -L --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change="_var_";})' ''
         # test running a program from the nix store
         "nix-shell -p hello --run hello"
       ];
+
+      varyCommands = anyStr: forEach commandsToTest (cmd: replaceStrings [ "_var_" ] [ anyStr ] cmd);
     
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
@@ -94,16 +107,23 @@
       (inp.flake-utils.lib.eachDefaultSystem (system: let pkgs = inp.nixpkgs.legacyPackages."${system}"; in rec {
         devShell = pkgs.mkShell {
           buildInputs = with pkgs; [
-            libguestfs-with-appliance
-            qemu
             bashInteractive
+            libguestfs-with-appliance
+            parallel
+            proot
+            qemu
           ];
         };
         packages.nix-portable = nixPortableForSystem { inherit system; };
         defaultPackage = packages.nix-portable;
         apps =
           let
-            makeQemuPipelines = debug: mapAttrs' (os: img:
+            makeQemuPipelines = debug: mapAttrs' (os: img: let
+              runtimes = filter (runtime: ! elem runtime (testImages."${os}".excludeRuntimes or []) ) [ "bwrap" "proot" ];
+              img =
+                if testImages."${os}" ? img then testImages."${os}".img
+                else fetchurl { inherit (testImages."${os}") url sha256 ;};
+            in
               nameValuePair
                 "job-qemu-${os}${optionalString debug "-debug"}"
                 {
@@ -112,31 +132,40 @@
                     #!/usr/bin/env bash
                     set -e
 
-                    img=${fetchurl { inherit (testImages."${os}") url sha256 ;}}
+                    if [ -n "$RAND_PORT" ]; then
+                      # derive ssh port number from os name, to gain ability to run these jobs in parallel without collision
+                      osHash=$((0x"$(echo ${os} | sha256sum | cut -d " " -f 1)")) && [ "$r" -lt 0 ] && ((r *= -1))
+                      port=$(( ($osHash % 55535) + 10000 ))
+                    else
+                      port=10022
+                    fi
+
+                    img=${img}
                     pubKey=${./testing}/id_ed25519.pub
                     privKey=${./testing}/id_ed25519
                     nixPortable=${packages.nix-portable}/bin/nix-portable
-                    ssh="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no test@localhost"
-                    sshRoot="${pkgs.openssh}/bin/ssh -p 10022 -i $privKey -o StrictHostKeyChecking=no root@localhost"
+                    ssh="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no test@localhost"
+                    sshRoot="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no root@localhost"
 
                     setup_and_start_vm() {
-                      cat $img > /tmp/img
+                      cat $img > /tmp/${os}-img
                       
-                      ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/img \
-                        --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
-                        --run-command 'ssh-keygen -A' \
-                        --ssh-inject test:file:$pubKey \
-                        --ssh-inject root:file:$pubKey \
-                        --copy-in $nixPortable:/home/test/ \
-                        ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
-                        ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
-                        --selinux-relabel
+                      if [ "${os}" != "nixos" ]; then
+                        ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
+                          --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
+                          --run-command 'ssh-keygen -A' \
+                          --ssh-inject test:file:$pubKey \
+                          --ssh-inject root:file:$pubKey \
+                          ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
+                          ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
+                          --selinux-relabel
+                      fi
 
                       ${pkgs.qemu}/bin/qemu-kvm \
-                        -hda /tmp/img \
-                        -m 2048 \
+                        -hda /tmp/${os}-img \
+                        -m 1500 \
                         -cpu max \
-                        -netdev user,hostfwd=tcp::10022-:22,id=n1 \
+                        -netdev user,hostfwd=tcp::$port-:22,id=n1 \
                         -device virtio-net-pci,netdev=n1 \
                         ${optionalString (! debug) "-nographic"} \
                         &
@@ -153,18 +182,19 @@
                       sleep 1
                     done
 
-                    ${optionalString debug ''
-                      $sshRoot "rm -rf /home/test/nix-portable"
-                      scp -P 10022 -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
-                    ''}
+                    # upload the nix-portable executable
+                    ${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+
 
                     echo -e "\n\nstarting to test nix-portable"
 
                     # test some nix commands
                     NP_DEBUG=''${NP_DEBUG:-1}
-                    ${concatStringsSep "\n" (map (cmd:
-                      ''$ssh "NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
-                    ) commandsToTest)}
+                    ${concatStringsSep "\n\n" (forEach runtimes (runtime:
+                      concatStringsSep "\n" (map (cmd:
+                        ''$ssh "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
+                      ) (varyCommands runtime))
+                    ))}
 
                     echo "all tests succeeded"
                   '');
@@ -175,6 +205,16 @@
           makeQemuPipelines true // makeQemuPipelines false
           # add 
           // {
+            job-qemu-all.type = "app";
+            job-qemu-all.program = let
+              jobs = (mapAttrsToList (n: v: v.program) (filterAttrs (n: v: 
+                hasPrefix "job-qemu" n && ! hasSuffix "debug" n && ! hasSuffix "all" n
+              ) apps));
+            in
+              toString (pkgs.writeScript "job-docker-debian" ''
+                #!/usr/bin/env bash
+                RAND_PORT=y ${pkgs.parallel}/bin/parallel bash ::: ${toString jobs}
+              '');
             job-docker-debian.type = "app";
             job-docker-debian.program = toString (pkgs.writeScript "job-docker-debian" ''
               #!/usr/bin/env bash
@@ -187,6 +227,7 @@
                   -e NP_DEBUG \
                   -e NP_MINIMAL"
               ${concatStringsSep "\n" (map (cmd: "$baseCmd debian /nix-portable ${cmd}") commandsToTest)}
+              echo "all tests succeeded"
             '');
             job-docker-debian-debug.type = "app";
             job-docker-debian-debug.program = toString (pkgs.writeScript "job-docker-debian-debug" ''
@@ -204,15 +245,19 @@
               else
                 ${concatStringsSep "\n" (map (cmd: "$baseCmd -it debian /nix-portable ${cmd}") commandsToTest)}
               fi
+              echo "all tests succeeded"
             '');
             job-local.type = "app";
             job-local.program = toString (pkgs.writeScript "job-local" ''
               #!/usr/bin/env bash
               set -e
-              export NP_DEBUG=1
-              ${concatStringsSep "\n" (map (cmd:
-                ''${packages.nix-portable}/bin/nix-portable ${cmd}''
-              ) commandsToTest)}
+              export NP_DEBUG=''${NP_DEBUG:-1}
+              ${concatStringsSep "\n\n" (forEach [ "bwrap" "proot" ] (runtime:
+                concatStringsSep "\n" (map (cmd:
+                  ''${packages.nix-portable}/bin/nix-portable ${cmd}''
+                ) commandsToTest)
+              ))}
+              echo "all tests succeeded"
             '');
           };
       }))
