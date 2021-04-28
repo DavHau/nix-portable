@@ -26,6 +26,8 @@
         centos7 = {
           url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
           sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
+          # user namespaces are disabled on centos 7
+          excludeRuntimes = [ "bwrap" ];
         };
         centos8 = {
           url = "https://cloud.centos.org/altarch/8/x86_64/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2";
@@ -48,10 +50,12 @@
         # test git
         ''nix eval --impure --expr 'builtins.fetchGit {url="https://github.com/davhau/nix-portable"; rev="7ebf4ca972c6613983b2698ab7ecda35308e9886";}' ''
         # test importing <nixpkgs> and building hello works
-        "nix build -L --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change=1;})'"
+        ''nix build -L --impure --expr '(import <nixpkgs> {}).hello.overrideAttrs(_:{change="_var_";})' ''
         # test running a program from the nix store
         "nix-shell -p hello --run hello"
       ];
+
+      varyCommands = anyStr: forEach commandsToTest (cmd: replaceStrings [ "_var_" ] [ anyStr ] cmd);
     
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
@@ -105,7 +109,9 @@
         defaultPackage = packages.nix-portable;
         apps =
           let
-            makeQemuPipelines = debug: mapAttrs' (os: img:
+            makeQemuPipelines = debug: mapAttrs' (os: img: let
+              runtimes = filter (runtime: ! elem runtime (testImages."${os}".excludeRuntimes or []) ) [ "bwrap" "proot" ];
+            in
               nameValuePair
                 "job-qemu-${os}${optionalString debug "-debug"}"
                 {
@@ -115,7 +121,7 @@
                     set -e
 
                     if [ -n "$RAND_PORT" ]; then
-                      # derive ssh port number from os name, to gain ability to run this in parallel without collision
+                      # derive ssh port number from os name, to gain ability to run these jobs in parallel without collision
                       osHash=$((0x"$(echo ${os} | sha256sum | cut -d " " -f 1)")) && [ "$r" -lt 0 ] && ((r *= -1))
                       port=$(( ($osHash % 55535) + 10000 ))
                     else
@@ -172,9 +178,11 @@
 
                     # test some nix commands
                     NP_DEBUG=''${NP_DEBUG:-1}
-                    ${concatStringsSep "\n" (map (cmd:
-                      ''$ssh "NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
-                    ) commandsToTest)}
+                    ${concatStringsSep "\n\n" (forEach runtimes (runtime:
+                      concatStringsSep "\n" (map (cmd:
+                        ''$ssh "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
+                      ) (varyCommands runtime))
+                    ))}
 
                     echo "all tests succeeded"
                   '');
@@ -207,6 +215,7 @@
                   -e NP_DEBUG \
                   -e NP_MINIMAL"
               ${concatStringsSep "\n" (map (cmd: "$baseCmd debian /nix-portable ${cmd}") commandsToTest)}
+              echo "all tests succeeded"
             '');
             job-docker-debian-debug.type = "app";
             job-docker-debian-debug.program = toString (pkgs.writeScript "job-docker-debian-debug" ''
@@ -224,15 +233,19 @@
               else
                 ${concatStringsSep "\n" (map (cmd: "$baseCmd -it debian /nix-portable ${cmd}") commandsToTest)}
               fi
+              echo "all tests succeeded"
             '');
             job-local.type = "app";
             job-local.program = toString (pkgs.writeScript "job-local" ''
               #!/usr/bin/env bash
               set -e
               export NP_DEBUG=''${NP_DEBUG:-1}
-              ${concatStringsSep "\n" (map (cmd:
-                ''${packages.nix-portable}/bin/nix-portable ${cmd}''
-              ) commandsToTest)}
+              ${concatStringsSep "\n\n" (forEach [ "bwrap" "proot" ] (runtime:
+                concatStringsSep "\n" (map (cmd:
+                  ''${packages.nix-portable}/bin/nix-portable ${cmd}''
+                ) commandsToTest)
+              ))}
+              echo "all tests succeeded"
             '');
           };
       }))
