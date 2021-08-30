@@ -16,8 +16,8 @@
       # After adding a new system, don't forget to add the name also in ./.github/workflows
       testImages = {
         arch = {
-          url = "https://gitlab.archlinux.org/archlinux/arch-boxes/-/jobs/20342/artifacts/raw/output/Arch-Linux-x86_64-basic-20210420.20342.qcow2";
-          sha256 = "b59f7218df206b135a0cd9a288e79e35cf892bca0c71373588d0d10b029d50a4";
+          url = "https://mirror.pkgbuild.com/images/v20210815.31636/Arch-Linux-x86_64-basic-20210815.31636.qcow2";
+          sha256 = "0f3yk6z0l013q9p04zixysypw1nfprm2960022ckypp5z7sn5d40";
           extraVirtCustomizeCommands = [
             "--run-command 'systemctl disable pacman-init'"
             "--run-command 'systemctl disable reflector-init'"
