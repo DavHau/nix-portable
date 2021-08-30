@@ -47,8 +47,8 @@
           }).config.system.build.isoImage) + "/iso/nixos.iso";
         };
         ubuntu = {
-          url = "https://cloud-images.ubuntu.com/focal/20210415/focal-server-cloudimg-amd64.img";
-          sha256 = "38b82727bfc1b36d9784bf07b8368c1d777450e978837e1cd7fa32b31837e77c";
+          url = "https://cloud-images.ubuntu.com/releases/focal/release-20210825/ubuntu-20.04-server-cloudimg-amd64.img";
+          sha256 = "0w4s6frx5xf189y5wadsckpkqrayjgfmxi7srqvdj42jmxwrzfwp";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
           ];
