@@ -24,7 +24,7 @@ Nix as a single binary which doesn't require configuration, privileges, or (user
 
 ### Under the hood:
   - The nix-portable binary is a self extracting archive, caching its contents in $HOME/.nix-portable
-  - Either bublewrap or proot is used to simulate the /nix/store directory which actually resides in $HOME/.nix-portable/store
+  - Either bubblewrap or proot is used to simulate the /nix/store directory which actually resides in $HOME/.nix-portable/store
   - A default nixpkgs channel is included and the NIX_PATH variable is set accordingly.
   - Nix version 2.4 is used and configured to enable `flakes` and `nix-command` out of the box.
 
