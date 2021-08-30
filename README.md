@@ -2,7 +2,7 @@
 <img width="400" src="https://gist.githubusercontent.com/DavHau/755fed3774e89c0b9b8953a0a25309fa/raw/fdb8b96eeb94d3b8a79481fa6fad53281e10b15d/nix_portable_2021-04-28_bw.png">  
 </p>
 
-Nix as a single binary which doesn't require any configuration, privileges, or namespaces.
+Nix as a single binary which doesn't require configuration, privileges, or (user) namespaces.
 
 ### Goals:
   - make it extremely simple to install nix
