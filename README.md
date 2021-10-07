@@ -77,7 +77,7 @@ To simulate the /nix/store and a few other directories, nix-portable supports th
 
 bwrap is preferred over proot and existing installations are preferred over the nix-portable included binaries.
 nix-portable will try to figure out which runtime is best for your system.
-In case the automatically selected runtime doesn't work, use the follwing environment variables to specify the runtime, but pleaae also open an issue, so we can improve the automatic selection.
+In case the automatically selected runtime doesn't work, use the follwing environment variables to specify the runtime, but please also open an issue, so we can improve the automatic selection.
 
 ### Environmant Variables
 The following environment variables are optional and can be used to override the default behaviour of nix-portable
