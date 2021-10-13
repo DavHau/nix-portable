@@ -79,7 +79,7 @@ bwrap is preferred over proot and existing installations are preferred over the 
 nix-portable will try to figure out which runtime is best for your system.
 In case the automatically selected runtime doesn't work, use the follwing environment variables to specify the runtime, but please also open an issue, so we can improve the automatic selection.
 
-### Environmant Variables
+### Environment Variables
 The following environment variables are optional and can be used to override the default behaviour of nix-portable
 ```
 NP_DEBUG      (1 = debug msgs; 2 = 'set -e' for nix-portable)
