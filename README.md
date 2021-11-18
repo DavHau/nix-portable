@@ -4,6 +4,8 @@
 
 Nix as a single binary which doesn't require configuration, privileges, or (user) namespaces.
 
+For binary downloads check the [releases](https://github.com/DavHau/nix-portable/releases) page.
+
 ### Goals:
   - make it extremely simple to install nix
   - make nix work in restricted environments (containers, HPC, ...)
