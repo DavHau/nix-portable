@@ -103,6 +103,10 @@ let
     [ -z "\$NP_LOCATION" ] && NP_LOCATION="\$HOME"
     dir="\$NP_LOCATION/.nix-portable"
     mkdir -p \$dir/bin
+    # santize the tmpbin directory
+    rm -rf "\$dir/tmpbin"
+    # create a directory to hold executable symlinks for overriding
+    mkdir -p "\$dir/tmpbin"
 
     # the fingerprint being present inside a file indicates that
     # this version of nix-portable has already been initialized
@@ -202,18 +206,14 @@ let
 
 
     ### detecting existing git installation
-    if [ -n "\$NP_MINIMAL" ]; then
+    # we need to install git inside the wrapped environment
+    # unless custom git executable path is specified in NP_GIT,
+    # since the existing git might be incompatible to Nix (e.g. v1.x)
+    if [ -n "\$NP_GIT" ]; then
       doInstallGit=false
+      ln -s "\$NP_GIT" "\$dir/tmpbin/git"
     else
-      existingGit="\$(PATH="\$PATH_OLD:\$PATH" which git 2>&3)" || existingGit=
-
-      # if git doesn't exist or resides in /nix/store/*, we need to install git
-      # inside the wrapped environment.
-      if [ -z "\$existingGit" ] || [[ "\$(realpath \$existingGit)" == /nix/store/* ]] ; then
-        doInstallGit=true
-      else
-        doInstallGit=false
-      fi
+      doInstallGit=true
     fi
 
 
@@ -440,21 +440,26 @@ let
     ### set PATH
     # restore original PATH and append busybox
     export PATH="\$PATH_OLD:\$dir/busybox/bin"
+    # apply overriding executable paths in \$dir/tmpbin/
+    export PATH="\$dir/tmpbin:\$PATH"
 
 
 
-    ### install git via nix, if git not installed or git installation is in /nix path
+    ### install git via nix, if git installation is not in /nix path
     if \$doInstallGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
-      echo "Installing git because it's missing. Disable this by setting 'NP_MINIMAL=1'"
+      echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'"
       \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
         (import ${nixpkgsSrc} {}).git.out
       "
     else
-      debug "git already installed or not required"
+      debug "git already installed or manually specified"
     fi
 
-    # add git if necessary
-    \$doInstallGit && export PATH="\$PATH:${git.out}/bin"
+    ### override the possibly existing git in the environment with the installed one
+    # excluding the case NP_GIT is set.
+    if \$doInstallGit; then
+      export PATH="${git.out}/bin:\$PATH"
+    fi
 
 
 
