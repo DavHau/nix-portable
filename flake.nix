@@ -1,6 +1,11 @@
 {
   inputs = {
+
     nixpkgs.url = "nixpkgs/nixos-21.11";
+
+    nix.url = "nix/2.5.1";
+    nix.inputs.nixpkgs.follows = "nixpkgs";
+
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -78,9 +83,7 @@
 
             bwrap = pkgs.pkgsStatic.bubblewrap;
 
-            nix = pkgs.nixFlakes.overrideAttrs (_:{
-              patches = (_.patches or []) ++ [ ./nix-nfs.patch ];
-            });
+            nix = inp.nix.packages."${system}".nix;
 
             busybox = pkgs.pkgsStatic.busybox;
             compression = "zstd -18 -T0";
