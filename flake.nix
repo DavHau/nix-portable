@@ -1,9 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-20.09";
-    nixpkgsUnstable.url = "nixpkgs/nixos-unstable";
-    nixpkgsOld.url = "nixpkgs/4fe23ed6cae572b295d0595ad4a4b39021a1468a";
-    nixpkgsOld.flake = false;
+    nixpkgs.url = "nixpkgs/nixos-21.11";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -65,14 +62,12 @@
       ];
 
       varyCommands = anyStr: forEach commandsToTest (cmd: replaceStrings [ "_var_" ] [ anyStr ] cmd);
-    
+
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
           pkgs = import inp.nixpkgs { inherit system crossSystem; };
-          pkgsUnstable = import inp.nixpkgsUnstable { inherit system crossSystem; };
           pkgsCached = if crossSystem == null then pkgs else import inp.nixpkgs { system = crossSystem; };
-          pkgsUnstableCached = if crossSystem == null then pkgs else import inp.nixpkgsUnstable { system = crossSystem; };
-          
+
           # the static proot built with nix somehow didn't work on other systems,
           # therefore using the proot static build from proot gitlab
           proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/gitlab.nix { inherit pkgs; };
@@ -81,7 +76,7 @@
 
             inherit pkgs proot;
 
-            bwrap = pkgsUnstable.pkgsStatic.bubblewrap;
+            bwrap = pkgs.pkgsStatic.bubblewrap;
 
             nix = pkgs.nixFlakes.overrideAttrs (_:{
               patches = (_.patches or []) ++ [ ./nix-nfs.patch ];
@@ -97,7 +92,7 @@
             xz = pkgs.pkgsStatic.xz;
             zstd = pkgs.pkgsStatic.zstd;
           };
-      
+
       prepareCloudImage = pkgs: qcowImg: pkgs.runCommand "img-with-ssh" {} ''
         ${pkgs.libguestfs-with-appliance}/virt-sysprep --version exit 1
       '';
@@ -149,7 +144,7 @@
 
                     setup_and_start_vm() {
                       cat $img > /tmp/${os}-img
-                      
+
                       if [ "${os}" != "nixos" ]; then
                         ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
                           --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
@@ -203,11 +198,11 @@
         in
           # generate jobs with and without debug settings
           makeQemuPipelines true // makeQemuPipelines false
-          # add 
+          # add
           // {
             job-qemu-all.type = "app";
             job-qemu-all.program = let
-              jobs = (mapAttrsToList (n: v: v.program) (filterAttrs (n: v: 
+              jobs = (mapAttrsToList (n: v: v.program) (filterAttrs (n: v:
                 hasPrefix "job-qemu" n && ! hasSuffix "debug" n && ! hasSuffix "all" n
               ) apps));
             in
@@ -262,11 +257,11 @@
           };
       }))
       { packages = (genAttrs [ "x86_64-linux" ] (system:
-          (listToAttrs (map (crossSystem: 
+          (listToAttrs (map (crossSystem:
             nameValuePair "nix-portable-${crossSystem}" (nixPortableForSystem { inherit crossSystem system; } )
           ) [ "aarch64-linux" ]))
         ));
       };
 
-      
+
 }

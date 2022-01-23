@@ -10,7 +10,7 @@ with builtins;
   busybox ? pkgs.pkgsStatic.busybox,
   cacert ? pkgs.cacert,
   compression ? "zstd -19 -T0",
-  git ? pkgs.git,
+  git ? pkgs.gitMinimal,
   gnutar ? pkgs.pkgsStatic.gnutar,
   lib ? pkgs.lib,
   mkDerivation ? pkgs.stdenv.mkDerivation,
@@ -41,7 +41,7 @@ let
           $storePaths | ${compression} > $out/tar
       '';
     };
-  
+
   packStaticBin = binPath: let
       binName = (last (splitString "/" binPath)); in
     pkgs.runCommand
