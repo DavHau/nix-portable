@@ -5,8 +5,6 @@
 
     nix.url = "nix/2.5.1";
     nix.inputs.nixpkgs.follows = "nixpkgs";
-
-    flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = { self, ... }@inp:
@@ -14,12 +12,19 @@
     with inp.nixpkgs.lib;
     let
 
+      lib = inp.nixpkgs.lib;
+
+      supportedSystems = [ "x86_64-linux" ];
+
+      forAllSystems = f: genAttrs supportedSystems
+        (system: f system (import inp.nixpkgs { inherit system; }));
+
       # Linux distro images to test nix-portable against
       # After adding a new system, don't forget to add the name also in ./.github/workflows
       testImages = {
         arch = {
-          url = "https://mirror.pkgbuild.com/images/v20210815.31636/Arch-Linux-x86_64-basic-20210815.31636.qcow2";
-          sha256 = "0f3yk6z0l013q9p04zixysypw1nfprm2960022ckypp5z7sn5d40";
+          url = "https://mirror.pkgbuild.com/images/v20211201.40458/Arch-Linux-x86_64-basic-20211201.40458.qcow2";
+          sha256 = "0xxhb92rn2kskq9pvfmbf9h6fy75x4czl58rfq5969kbbb49yn19";
           extraVirtCustomizeCommands = [
             "--run-command 'systemctl disable pacman-init'"
             "--run-command 'systemctl disable reflector-init'"
@@ -49,8 +54,8 @@
           }).config.system.build.isoImage) + "/iso/nixos.iso";
         };
         ubuntu = {
-          url = "https://cloud-images.ubuntu.com/releases/focal/release-20210825/ubuntu-20.04-server-cloudimg-amd64.img";
-          sha256 = "0w4s6frx5xf189y5wadsckpkqrayjgfmxi7srqvdj42jmxwrzfwp";
+          url = "https://cloud-images.ubuntu.com/releases/focal/release-20220118/ubuntu-20.04-server-cloudimg-amd64.img";
+          sha256 = "05p2qbmp6sbykm1iszb2zvbwbnydqg6pdrplj9z56v3cr964s9p1";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
           ];
@@ -75,7 +80,7 @@
 
           # the static proot built with nix somehow didn't work on other systems,
           # therefore using the proot static build from proot gitlab
-          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/gitlab.nix { inherit pkgs; };
+          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/github.nix { inherit pkgs; };
         in
           pkgs.callPackage ./default.nix rec {
 
@@ -102,19 +107,29 @@
 
   in
     recursiveUpdate
-      (inp.flake-utils.lib.eachDefaultSystem (system: let pkgs = inp.nixpkgs.legacyPackages."${system}"; in rec {
-        devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            bashInteractive
-            libguestfs-with-appliance
-            parallel
-            proot
-            qemu
-          ];
-        };
-        packages.nix-portable = nixPortableForSystem { inherit system; };
-        defaultPackage = packages.nix-portable;
-        apps =
+      ({
+
+        devShell = forAllSystems (system: pkgs:
+          pkgs.mkShell {
+            buildInputs = with pkgs; [
+              bashInteractive
+              libguestfs-with-appliance
+              parallel
+              proot
+              qemu
+            ];
+          }
+        );
+
+        packages = forAllSystems (system: pkgs: {
+          nix-portable = nixPortableForSystem { inherit system; };
+        });
+
+        defaultPackage = forAllSystems (system: pkgs:
+          self.packages."${system}".nix-portable
+        );
+
+        apps = forAllSystems (system: pkgs:
           let
             makeQemuPipelines = debug: mapAttrs' (os: img: let
               runtimes = filter (runtime: ! elem runtime (testImages."${os}".excludeRuntimes or []) ) [ "bwrap" "proot" ];
@@ -141,12 +156,13 @@
                     img=${img}
                     pubKey=${./testing}/id_ed25519.pub
                     privKey=${./testing}/id_ed25519
-                    nixPortable=${packages.nix-portable}/bin/nix-portable
+                    nixPortable=${self.packages."${system}".nix-portable}/bin/nix-portable
                     ssh="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no test@localhost"
                     sshRoot="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no root@localhost"
 
                     setup_and_start_vm() {
                       cat $img > /tmp/${os}-img
+                      qemu-img resize /tmp/${os}-img +5G
 
                       if [ "${os}" != "nixos" ]; then
                         ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
@@ -161,7 +177,7 @@
 
                       ${pkgs.qemu}/bin/qemu-kvm \
                         -hda /tmp/${os}-img \
-                        -m 1500 \
+                        -m 2500 \
                         -cpu max \
                         -netdev user,hostfwd=tcp::$port-:22,id=n1 \
                         -device virtio-net-pci,netdev=n1 \
@@ -181,7 +197,12 @@
                     done
 
                     # upload the nix-portable executable
-                    ${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+                    ${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no ${self.packages."${system}".nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+
+
+                    echo -e "\n\ncreating tmpfs"
+                    $sshRoot mkdir /np_tmp
+                    $sshRoot mount -t tmpfs /bin/true /np_tmp
 
 
                     echo -e "\n\nstarting to test nix-portable"
@@ -190,7 +211,7 @@
                     NP_DEBUG=''${NP_DEBUG:-1}
                     ${concatStringsSep "\n\n" (forEach runtimes (runtime:
                       concatStringsSep "\n" (map (cmd:
-                        ''$ssh "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
+                        ''$ssh "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL NP_LOCATION=/np_tmp /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
                       ) (varyCommands runtime))
                     ))}
 
@@ -207,7 +228,7 @@
             job-qemu-all.program = let
               jobs = (mapAttrsToList (n: v: v.program) (filterAttrs (n: v:
                 hasPrefix "job-qemu" n && ! hasSuffix "debug" n && ! hasSuffix "all" n
-              ) apps));
+              ) self.apps."${system}"));
             in
               toString (pkgs.writeScript "job-docker-debian" ''
                 #!/usr/bin/env bash
@@ -257,8 +278,9 @@
               ))}
               echo "all tests succeeded"
             '');
-          };
-      }))
+          }
+        );
+      })
       { packages = (genAttrs [ "x86_64-linux" ] (system:
           (listToAttrs (map (crossSystem:
             nameValuePair "nix-portable-${crossSystem}" (nixPortableForSystem { inherit crossSystem system; } )
