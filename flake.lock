@@ -1,5 +1,20 @@
 {
   "nodes": {
+    "defaultChannel": {
+      "locked": {
+        "lastModified": 1642798845,
+        "narHash": "sha256-1g1X3wKmroGix68OXwb4gR1yXKPQ36apI1dssd/YbuM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e84444b14cc75a4be17b58fd2c344f47dddf084e",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "ref": "nixos-21.11",
+        "type": "indirect"
+      }
+    },
     "lowdown-src": {
       "flake": false,
       "locked": {
@@ -24,16 +39,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1635794566,
-        "narHash": "sha256-op48CCDgLHK0qV1Batz4Ln5FqBiRjlE6qHTiZgt3b6k=",
+        "lastModified": 1639739069,
+        "narHash": "sha256-GOsiqy9EaTwDn2PLZ4eFj1VkXcBUbqrqHehRE9GuGdU=",
         "owner": "NixOS",
         "repo": "nix",
-        "rev": "9d5c985aedcf7d11a5310eae6f27dcde8eb7f608",
+        "rev": "b4f250417ab64f237c8b51439fe1f427193ab23b",
         "type": "github"
       },
       "original": {
         "id": "nix",
-        "ref": "2.4",
+        "ref": "2.5.1",
         "type": "indirect"
       }
     },
@@ -54,6 +69,7 @@
     },
     "root": {
       "inputs": {
+        "defaultChannel": "defaultChannel",
         "nix": "nix",
         "nixpkgs": "nixpkgs"
       }
