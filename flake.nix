@@ -6,7 +6,7 @@
     # the nixpkgs version shipped with the nix-portable executable
     # TODO: find out why updating this leads to error when building pkgs.hello:
     # Error: checking whether build environment is sane... ls: cannot access './configure': No such file or directory
-    defaultChannel.url = "nixpkgs/nixos-21.11";
+    defaultChannel.url = "nixpkgs/nixos-20.09";
 
     nix.url = "nix/2.5.1";
     nix.inputs.nixpkgs.follows = "nixpkgs";
@@ -165,7 +165,6 @@
 
                     setup_and_start_vm() {
                       cat $img > /tmp/${os}-img
-                      qemu-img resize /tmp/${os}-img +5G
 
                       if [ "${os}" != "nixos" ]; then
                         ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
@@ -245,7 +244,7 @@
               export NP_DEBUG=''${NP_DEBUG:-1}
               baseCmd="\
                 $DOCKER_CMD run -i --rm \
-                  -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
+                  -v ${self.packages."${system}".nix-portable}/bin/nix-portable:/nix-portable \
                   -e NP_DEBUG \
                   -e NP_MINIMAL"
               ${concatStringsSep "\n" (map (cmd: "$baseCmd debian /nix-portable ${cmd}") commandsToTest)}
@@ -259,7 +258,7 @@
               export NP_DEBUG=${NP_DEBUG:-1}
               baseCmd="\
                 $DOCKER_CMD run -i --rm \
-                  -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
+                  -v ${self.packages."${system}".nix-portable}/bin/nix-portable:/nix-portable \
                   -e NP_DEBUG \
                   -e NP_MINIMAL"
               if [ -n "$1" ]; then
@@ -276,7 +275,7 @@
               export NP_DEBUG=''${NP_DEBUG:-1}
               ${concatStringsSep "\n\n" (forEach [ "bwrap" "proot" ] (runtime:
                 concatStringsSep "\n" (map (cmd:
-                  ''${packages.nix-portable}/bin/nix-portable ${cmd}''
+                  ''${self.packages."${system}".nix-portable}/bin/nix-portable ${cmd}''
                 ) commandsToTest)
               ))}
               echo "all tests succeeded"
