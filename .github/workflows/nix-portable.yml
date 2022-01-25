@@ -1,5 +1,5 @@
 
-name: "Build"
+name: "build and test"
 on:
   pull_request:
   push:
@@ -10,6 +10,10 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        system: [ x86_64-linux, aarch64-linux ]
+
     steps:
 
     - uses: actions/checkout@v2
@@ -28,7 +32,16 @@ jobs:
         name: nix-portable
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-    - run: nix build -L .
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+      with:
+        image: tonistiigi/binfmt@sha256:8de6f2decb92e9001d094534bf8a92880c175bd5dfb4a9d8579f26f09821cfa2
+        platforms: all
+
+    - name: Install binfmt support
+      run: sudo apt-get install -y
+
+    - run: 'nix build --option system ${{ matrix.system }} -L .#defaultPackage.${{ matrix.system }}'
 
     - name: Archive result
       uses: actions/upload-artifact@v2
@@ -47,7 +60,7 @@ jobs:
       matrix:
         # qemu_os: [ arch, centos7, centos8, debian, nixos, ubuntu ]
         # TODO: fix and re-activate tests
-        qemu_os: [ centos7, debian, ubuntu ]
+        qemu_os: [ centos7, debian, ubuntu, debian-aarch64 ]
     steps:
 
     - uses: actions/checkout@v2
@@ -66,7 +79,7 @@ jobs:
         name: nix-portable
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-    - run: nix run -L .#job-qemu-${{ matrix.qemu_os }}
+    - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}'
 
 
 

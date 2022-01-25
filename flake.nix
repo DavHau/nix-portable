@@ -19,7 +19,7 @@
 
       lib = inp.nixpkgs.lib;
 
-      supportedSystems = [ "x86_64-linux" ];
+      supportedSystems = [ "x86_64-linux" "aarch64-linux" "armv7l-linux" ];
 
       forAllSystems = f: genAttrs supportedSystems
         (system: f system (import inp.nixpkgs { inherit system; }));
@@ -28,6 +28,7 @@
       # After adding a new system, don't forget to add the name also in ./.github/workflows
       testImages = {
         arch = {
+          system = "x86_64-linux";
           url = "https://mirror.pkgbuild.com/images/v20211201.40458/Arch-Linux-x86_64-basic-20211201.40458.qcow2";
           sha256 = "0xxhb92rn2kskq9pvfmbf9h6fy75x4czl58rfq5969kbbb49yn19";
           extraVirtCustomizeCommands = [
@@ -36,22 +37,26 @@
           ];
         };
         centos7 = {
+          system = "x86_64-linux";
           url = "https://cloud.centos.org/altarch/7/images/CentOS-7-x86_64-GenericCloud-2009.qcow2c";
           sha256 = "09wqzlhb858qm548ak4jj4adchxn7rgf5fq778hrc52rjqym393v";
           # user namespaces are disabled on centos 7
           excludeRuntimes = [ "bwrap" ];
         };
         centos8 = {
+          system = "x86_64-linux";
           url = "https://cloud.centos.org/altarch/8/x86_64/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2";
           sha256 = "7ec97062618dc0a7ebf211864abf63629da1f325578868579ee70c495bed3ba0";
         };
         debian = {
+          system = "x86_64-linux";
           url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
           sha256 = "0mf9k3pgzighibly1sy3cjq7c761r3akp8mlgd878lwf006vqrky";
           # permissions for user namespaces not enabled by default
           excludeRuntimes = [ "bwrap" ];
         };
         nixos = {
+          system = "x86_64-linux";
           # use iso image for nixos because building a qcow2 would require KVM
           img = (toString (nixosSystem {
             system = "x86_64-linux";
@@ -59,11 +64,29 @@
           }).config.system.build.isoImage) + "/iso/nixos.iso";
         };
         ubuntu = {
+          system = "x86_64-linux";
           url = "https://cloud-images.ubuntu.com/releases/focal/release-20220118/ubuntu-20.04-server-cloudimg-amd64.img";
           sha256 = "05p2qbmp6sbykm1iszb2zvbwbnydqg6pdrplj9z56v3cr964s9p1";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
           ];
+        };
+
+        # aarch64 tests
+        nixos-aarch64 = {
+          system = "aarch64-linux";
+          # use iso image for nixos because building a qcow2 would require KVM
+          img = (toString (nixosSystem {
+            system = "aarch64-linux";
+            modules = [(import ./testing/nixos-iso.nix)];
+          }).config.system.build.isoImage) + "/iso/nixos.iso";
+        };
+        debian-aarch64 = {
+          system = "aarch64-linux";
+          url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-arm64.qcow2";
+          sha256 = "0mz868j1k8jwhgg9a21dv7dr4rsy1bhklbqqw3qig06acy0vg8yi";
+          # permissions for user namespaces not enabled by default
+          excludeRuntimes = [ "bwrap" ];
         };
       };
 
@@ -96,7 +119,7 @@
             pkgs = pkgsDefaultChannel;
 
             lib = inp.nixpkgs.lib;
-            compression = "zstd -18 -T0";
+            compression = "zstd -3 -T1";
 
             nix = inp.nix.packages."${system}".nix;
 
@@ -139,6 +162,12 @@
               img =
                 if testImages."${os}" ? img then testImages."${os}".img
                 else fetchurl { inherit (testImages."${os}") url sha256 ;};
+              system = testImages."${os}".system;
+              qemu-bin =
+                if pkgs.buildPlatform.system == system then
+                  "qemu-kvm"
+                else
+                  "qemu-system-${lib.head (lib.splitString "-" system)}";
             in
               nameValuePair
                 "job-qemu-${os}${optionalString debug "-debug"}"
@@ -162,28 +191,31 @@
                     nixPortable=${self.packages."${system}".nix-portable}/bin/nix-portable
                     ssh="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no test@localhost"
                     sshRoot="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no root@localhost"
+                    scp="${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no"
 
                     setup_and_start_vm() {
                       cat $img > /tmp/${os}-img
 
-                      if [ "${os}" != "nixos" ]; then
+                      if [[ "${os}" != nixos* ]]; then
                         ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
-                          --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
-                          --run-command 'ssh-keygen -A' \
-                          --ssh-inject test:file:$pubKey \
+                          --firstboot ${pkgs.writeScript "firstboot" "#!/usr/bin/env bash \nuseradd test && mkdir -p /home/test && chown test.test /home/test; ssh-keygen -A"} \
                           --ssh-inject root:file:$pubKey \
                           ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
                           ${optionalString debug "--root-password file:${pkgs.writeText "pw" "root"}"} \
                           --selinux-relabel
                       fi
 
-                      ${pkgs.qemu}/bin/qemu-kvm \
-                        -hda /tmp/${os}-img \
+                      cp ${pkgs.callPackage ./testing/qemu-efi.nix {}} ./QEMU_EFI.img
+
+                      ${pkgs.qemu}/bin/${qemu-bin} \
+                        -drive file=/tmp/${os}-img \
+                        -smp 2 \
                         -m 2500 \
-                        -cpu max \
                         -netdev user,hostfwd=tcp::$port-:22,id=n1 \
                         -device virtio-net-pci,netdev=n1 \
                         ${optionalString (! debug) "-nographic"} \
+                        ${optionalString (system == "aarch64-linux")
+                          "-cpu cortex-a53 -machine virt -drive if=pflash,format=raw,file=./QEMU_EFI.img"} \
                         &
                     }
 
@@ -193,18 +225,23 @@
                     ''}
                       setup_and_start_vm
 
-                    while ! $ssh -o ConnectTimeout=2 true 2>/dev/null ; do
+                    while ! $sshRoot -o ConnectTimeout=2 true 2>/dev/null ; do
                       echo "waiting for ssh"
                       sleep 1
                     done
 
-                    # upload the nix-portable executable
-                    ${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no ${self.packages."${system}".nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
-
-
-                    echo -e "\n\ncreating tmpfs"
-                    $sshRoot mkdir /np_tmp
+                    echo -e "\n\nsetting up machine via ssh"
+                    $sshRoot mkdir -p /np_tmp
                     $sshRoot mount -t tmpfs /bin/true /np_tmp
+                    $sshRoot mkdir -p /home/test/.ssh
+                    echo "uploading ssh key"
+                    $scp ${./testing}/id_ed25519.pub root@localhost:/home/test/.ssh/authorized_keys
+                    $sshRoot chown -R test /home/test
+                    $sshRoot chmod 600 /home/test/.ssh/authorized_keys
+                    echo "finished uploading ssh key"
+
+                    echo "upload the nix-portable executable"
+                    $scp ${self.packages."${system}".nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
 
 
                     echo -e "\n\nstarting to test nix-portable"
