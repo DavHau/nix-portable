@@ -10,11 +10,8 @@ with builtins;
   busybox ? pkgs.pkgsStatic.busybox,
   cacert ? pkgs.cacert,
   compression ? "zstd -19 -T0",
-  git ? pkgs.git,
   gnutar ? pkgs.pkgsStatic.gnutar,
   lib ? pkgs.lib,
-  mkDerivation ? pkgs.stdenv.mkDerivation,
-  nixpkgsSrc ? pkgs.path,
   perl ? pkgs.perl,
   pkgs ? import <nixpkgs> {},
   xz ? pkgs.pkgsStatic.xz,
@@ -24,8 +21,13 @@ with builtins;
 with lib;
 let
 
+  nixpkgsSrc = pkgs.path;
+
+  gitAttribute = "gitMinimal";
+  git = pkgs."${gitAttribute}";
+
   maketar = targets:
-    mkDerivation {
+    pkgs.stdenv.mkDerivation {
       name = "maketar";
       nativeBuildInputs = [ perl zstd ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
@@ -41,7 +43,7 @@ let
           $storePaths | ${compression} > $out/tar
       '';
     };
-  
+
   packStaticBin = binPath: let
       binName = (last (splitString "/" binPath)); in
     pkgs.runCommand
@@ -128,6 +130,7 @@ let
 
       echo "build-users-group = " > \$dir/conf/nix.conf
       echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
+      echo "ignored-acls = security.selinux system.nfs4_acl" >> \$dir/conf/nix.conf
       echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
       echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
 
@@ -449,7 +452,7 @@ let
     if \$doInstallGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
       echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'"
       \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
-        (import ${nixpkgsSrc} {}).git.out
+        (import ${nixpkgsSrc} {}).${gitAttribute}.out
       "
     else
       debug "git already installed or manually specified"

@@ -1,10 +1,15 @@
 {
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-20.09";
-    nixpkgsUnstable.url = "nixpkgs/nixos-unstable";
-    nixpkgsOld.url = "nixpkgs/4fe23ed6cae572b295d0595ad4a4b39021a1468a";
-    nixpkgsOld.flake = false;
-    flake-utils.url = "github:numtide/flake-utils";
+
+    nixpkgs.url = "nixpkgs/nixos-21.11";
+
+    # the nixpkgs version shipped with the nix-portable executable
+    # TODO: find out why updating this leads to error when building pkgs.hello:
+    # Error: checking whether build environment is sane... ls: cannot access './configure': No such file or directory
+    defaultChannel.url = "nixpkgs/nixos-20.09";
+
+    nix.url = "nix/2.5.1";
+    nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, ... }@inp:
@@ -12,12 +17,19 @@
     with inp.nixpkgs.lib;
     let
 
+      lib = inp.nixpkgs.lib;
+
+      supportedSystems = [ "x86_64-linux" ];
+
+      forAllSystems = f: genAttrs supportedSystems
+        (system: f system (import inp.nixpkgs { inherit system; }));
+
       # Linux distro images to test nix-portable against
       # After adding a new system, don't forget to add the name also in ./.github/workflows
       testImages = {
         arch = {
-          url = "https://mirror.pkgbuild.com/images/v20210815.31636/Arch-Linux-x86_64-basic-20210815.31636.qcow2";
-          sha256 = "0f3yk6z0l013q9p04zixysypw1nfprm2960022ckypp5z7sn5d40";
+          url = "https://mirror.pkgbuild.com/images/v20211201.40458/Arch-Linux-x86_64-basic-20211201.40458.qcow2";
+          sha256 = "0xxhb92rn2kskq9pvfmbf9h6fy75x4czl58rfq5969kbbb49yn19";
           extraVirtCustomizeCommands = [
             "--run-command 'systemctl disable pacman-init'"
             "--run-command 'systemctl disable reflector-init'"
@@ -47,8 +59,8 @@
           }).config.system.build.isoImage) + "/iso/nixos.iso";
         };
         ubuntu = {
-          url = "https://cloud-images.ubuntu.com/releases/focal/release-20210825/ubuntu-20.04-server-cloudimg-amd64.img";
-          sha256 = "0w4s6frx5xf189y5wadsckpkqrayjgfmxi7srqvdj42jmxwrzfwp";
+          url = "https://cloud-images.ubuntu.com/releases/focal/release-20220118/ubuntu-20.04-server-cloudimg-amd64.img";
+          sha256 = "05p2qbmp6sbykm1iszb2zvbwbnydqg6pdrplj9z56v3cr964s9p1";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
           ];
@@ -65,58 +77,62 @@
       ];
 
       varyCommands = anyStr: forEach commandsToTest (cmd: replaceStrings [ "_var_" ] [ anyStr ] cmd);
-    
+
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
+          pkgsDefaultChannel = import inp.defaultChannel { inherit system crossSystem; };
           pkgs = import inp.nixpkgs { inherit system crossSystem; };
-          pkgsUnstable = import inp.nixpkgsUnstable { inherit system crossSystem; };
           pkgsCached = if crossSystem == null then pkgs else import inp.nixpkgs { system = crossSystem; };
-          pkgsUnstableCached = if crossSystem == null then pkgs else import inp.nixpkgsUnstable { system = crossSystem; };
-          
+
           # the static proot built with nix somehow didn't work on other systems,
           # therefore using the proot static build from proot gitlab
-          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/gitlab.nix { inherit pkgs; };
+          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/github.nix { inherit pkgs; };
         in
-          pkgs.callPackage ./default.nix rec {
+          # crashes if nixpkgs updated: error: executing 'git': No such file or directory
+          pkgs.callPackage ./default.nix {
 
-            inherit pkgs proot;
+            inherit proot;
 
-            bwrap = pkgsUnstable.pkgsStatic.bubblewrap;
+            pkgs = pkgsDefaultChannel;
 
-            nix = pkgs.nixFlakes.overrideAttrs (_:{
-              patches = (_.patches or []) ++ [ ./nix-nfs.patch ];
-            });
+            lib = inp.nixpkgs.lib;
+            compression = "zstd -18 -T0";
+
+            nix = inp.nix.packages."${system}".nix;
 
             busybox = pkgs.pkgsStatic.busybox;
-            compression = "zstd -18 -T0";
+            bwrap = pkgs.pkgsStatic.bubblewrap;
             gnutar = pkgs.pkgsStatic.gnutar;
-            lib = inp.nixpkgs.lib;
-            mkDerivation = pkgs.stdenv.mkDerivation;
-            nixpkgsSrc = pkgs.path;
             perl = pkgs.pkgsBuildBuild.perl;
             xz = pkgs.pkgsStatic.xz;
             zstd = pkgs.pkgsStatic.zstd;
           };
-      
-      prepareCloudImage = pkgs: qcowImg: pkgs.runCommand "img-with-ssh" {} ''
-        ${pkgs.libguestfs-with-appliance}/virt-sysprep --version exit 1
-      '';
 
   in
     recursiveUpdate
-      (inp.flake-utils.lib.eachDefaultSystem (system: let pkgs = inp.nixpkgs.legacyPackages."${system}"; in rec {
-        devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            bashInteractive
-            libguestfs-with-appliance
-            parallel
-            proot
-            qemu
-          ];
-        };
-        packages.nix-portable = nixPortableForSystem { inherit system; };
-        defaultPackage = packages.nix-portable;
-        apps =
+      ({
+
+        devShell = forAllSystems (system: pkgs:
+          pkgs.mkShell {
+            buildInputs = with pkgs; [
+              bashInteractive
+              libguestfs-with-appliance
+              parallel
+              proot
+              qemu
+            ];
+          }
+        );
+
+        packages = forAllSystems (system: pkgs: {
+          nix-portable = nixPortableForSystem { inherit system; };
+        });
+
+        defaultPackage = forAllSystems (system: pkgs:
+          self.packages."${system}".nix-portable
+        );
+
+        apps = forAllSystems (system: pkgs:
           let
             makeQemuPipelines = debug: mapAttrs' (os: img: let
               runtimes = filter (runtime: ! elem runtime (testImages."${os}".excludeRuntimes or []) ) [ "bwrap" "proot" ];
@@ -143,13 +159,13 @@
                     img=${img}
                     pubKey=${./testing}/id_ed25519.pub
                     privKey=${./testing}/id_ed25519
-                    nixPortable=${packages.nix-portable}/bin/nix-portable
+                    nixPortable=${self.packages."${system}".nix-portable}/bin/nix-portable
                     ssh="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no test@localhost"
                     sshRoot="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no root@localhost"
 
                     setup_and_start_vm() {
                       cat $img > /tmp/${os}-img
-                      
+
                       if [ "${os}" != "nixos" ]; then
                         ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
                           --run-command 'useradd test && mkdir -p /home/test && chown test.test /home/test' \
@@ -163,7 +179,7 @@
 
                       ${pkgs.qemu}/bin/qemu-kvm \
                         -hda /tmp/${os}-img \
-                        -m 1500 \
+                        -m 2500 \
                         -cpu max \
                         -netdev user,hostfwd=tcp::$port-:22,id=n1 \
                         -device virtio-net-pci,netdev=n1 \
@@ -183,7 +199,12 @@
                     done
 
                     # upload the nix-portable executable
-                    ${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no ${packages.nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+                    ${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no ${self.packages."${system}".nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+
+
+                    echo -e "\n\ncreating tmpfs"
+                    $sshRoot mkdir /np_tmp
+                    $sshRoot mount -t tmpfs /bin/true /np_tmp
 
 
                     echo -e "\n\nstarting to test nix-portable"
@@ -192,7 +213,7 @@
                     NP_DEBUG=''${NP_DEBUG:-1}
                     ${concatStringsSep "\n\n" (forEach runtimes (runtime:
                       concatStringsSep "\n" (map (cmd:
-                        ''$ssh "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
+                        ''$ssh "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL NP_LOCATION=/np_tmp /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
                       ) (varyCommands runtime))
                     ))}
 
@@ -203,13 +224,13 @@
         in
           # generate jobs with and without debug settings
           makeQemuPipelines true // makeQemuPipelines false
-          # add 
+          # add
           // {
             job-qemu-all.type = "app";
             job-qemu-all.program = let
-              jobs = (mapAttrsToList (n: v: v.program) (filterAttrs (n: v: 
+              jobs = (mapAttrsToList (n: v: v.program) (filterAttrs (n: v:
                 hasPrefix "job-qemu" n && ! hasSuffix "debug" n && ! hasSuffix "all" n
-              ) apps));
+              ) self.apps."${system}"));
             in
               toString (pkgs.writeScript "job-docker-debian" ''
                 #!/usr/bin/env bash
@@ -223,7 +244,7 @@
               export NP_DEBUG=''${NP_DEBUG:-1}
               baseCmd="\
                 $DOCKER_CMD run -i --rm \
-                  -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
+                  -v ${self.packages."${system}".nix-portable}/bin/nix-portable:/nix-portable \
                   -e NP_DEBUG \
                   -e NP_MINIMAL"
               ${concatStringsSep "\n" (map (cmd: "$baseCmd debian /nix-portable ${cmd}") commandsToTest)}
@@ -237,7 +258,7 @@
               export NP_DEBUG=${NP_DEBUG:-1}
               baseCmd="\
                 $DOCKER_CMD run -i --rm \
-                  -v ${packages.nix-portable}/bin/nix-portable:/nix-portable \
+                  -v ${self.packages."${system}".nix-portable}/bin/nix-portable:/nix-portable \
                   -e NP_DEBUG \
                   -e NP_MINIMAL"
               if [ -n "$1" ]; then
@@ -254,19 +275,20 @@
               export NP_DEBUG=''${NP_DEBUG:-1}
               ${concatStringsSep "\n\n" (forEach [ "bwrap" "proot" ] (runtime:
                 concatStringsSep "\n" (map (cmd:
-                  ''${packages.nix-portable}/bin/nix-portable ${cmd}''
+                  ''${self.packages."${system}".nix-portable}/bin/nix-portable ${cmd}''
                 ) commandsToTest)
               ))}
               echo "all tests succeeded"
             '');
-          };
-      }))
+          }
+        );
+      })
       { packages = (genAttrs [ "x86_64-linux" ] (system:
-          (listToAttrs (map (crossSystem: 
+          (listToAttrs (map (crossSystem:
             nameValuePair "nix-portable-${crossSystem}" (nixPortableForSystem { inherit crossSystem system; } )
           ) [ "aarch64-linux" ]))
         ));
       };
 
-      
+
 }

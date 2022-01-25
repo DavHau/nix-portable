@@ -1,5 +1,5 @@
 <p align="center">
-<img width="400" src="https://gist.githubusercontent.com/DavHau/755fed3774e89c0b9b8953a0a25309fa/raw/fdb8b96eeb94d3b8a79481fa6fad53281e10b15d/nix_portable_2021-04-28_bw.png">  
+<img width="400" src="https://gist.githubusercontent.com/DavHau/755fed3774e89c0b9b8953a0a25309fa/raw/fdb8b96eeb94d3b8a79481fa6fad53281e10b15d/nix_portable_2021-04-28_bw.png">
 </p>
 
 Nix as a single binary which doesn't require configuration, privileges, or (user) namespaces.
@@ -41,7 +41,7 @@ In that situation, it might be beneficial to use a remote builder or alternative
   - managing nix profiles via `nix-env`
   - managing nix channels via `nix-channel`
   - support MacOS
-  - support other architecutres besides x86_64 
+  - support other architecutres besides x86_64
 
 
 ### Executing nix-portable
@@ -59,7 +59,7 @@ After obtaining the binary, there are two options:
     ```
 
 ### Executing installed programs
-All programs installed via nix-portable will only work inside the wrapped environment.  
+All programs installed via nix-portable will only work inside the wrapped environment.
 To enter the wrapped environment just use nix-shell:
 ```
   nix-portable nix-shell -p bash
@@ -87,11 +87,17 @@ The following environment variables are optional and can be used to override the
 NP_DEBUG      (1 = debug msgs; 2 = 'set -e' for nix-portable)
 NP_GIT        specify path to the git executable
 NP_LOCATION   where to put the `.nix-portable` dir. (defaults to `$HOME`)
-NP_RUNTIME    which runtime to use (must be 'bwrap' or 'proot') 
+NP_RUNTIME    which runtime to use (must be 'bwrap' or 'proot')
 NP_BWRAP      specify the path to the bwrap executable to use
 NP_PROOT      specify the path to the proot executable to use
 NP_RUN        override the complete command to run nix
               (to use an unsupported runtime, or for debugging)
               nix will then be executed like: $NP_RUN {nix-binary} {args...}
-          
+
+```
+
+### Building / Contributing
+To speed up builds, add the nix-portable cache:
+```
+nix-shell -p cachix --run "cachix use nix-portable"
 ```
