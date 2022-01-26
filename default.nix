@@ -16,6 +16,8 @@ with builtins;
   pkgs ? import <nixpkgs> {},
   xz ? pkgs.pkgsStatic.xz,
   zstd ? pkgs.pkgsStatic.zstd,
+
+  buildSystem ? builtins.currentSystem,
   ...
 }@inp:
 with lib;
@@ -23,19 +25,23 @@ let
 
   nixpkgsSrc = pkgs.path;
 
+  pkgsBuild = import pkgs.path { system = buildSystem; };
+
+  # TODO: git could be more minimal via:
+  # perlSupport=false; guiSupport=false; nlsSupport=false;
   gitAttribute = "gitMinimal";
   git = pkgs."${gitAttribute}";
 
   maketar = targets:
-    pkgs.stdenv.mkDerivation {
+    pkgsBuild.stdenv.mkDerivation {
       name = "maketar";
-      nativeBuildInputs = [ perl zstd ];
+      nativeBuildInputs = [ pkgsBuild.perl pkgsBuild.zstd ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
       buildCommand = ''
-        storePaths=$(perl ${pkgs.pathsFromGraph} ./closure-*)
+        storePaths=$(perl ${pkgsBuild.pathsFromGraph} ./closure-*)
         mkdir $out
         echo $storePaths > $out/index
-        cp -r ${pkgs.closureInfo { rootPaths = targets; }} $out/closureInfo
+        cp -r ${pkgsBuild.closureInfo { rootPaths = targets; }} $out/closureInfo
 
         tar -cf - \
           --owner=0 --group=0 --mode=u+rw,uga+r \
@@ -75,6 +81,9 @@ let
   # Variables/expressions escaped via `\$` will be evaluated at run time
   runtimeScript = ''
     #!/usr/bin/env bash
+
+    # there seem to be less issues with proot when disabling seccomp
+    export PROOT_NO_SECCOMP=\''${PROOT_NO_SECCOMP:-1}
 
     set -e
     if [ -n "\$NP_DEBUG" ] && [ "\$NP_DEBUG" -ge 2 ]; then

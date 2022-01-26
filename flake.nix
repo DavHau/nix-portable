@@ -129,6 +129,9 @@
             perl = pkgs.pkgsBuildBuild.perl;
             xz = pkgs.pkgsStatic.xz;
             zstd = pkgs.pkgsStatic.zstd;
+
+            # tar crashed on emulated aarch64 system
+            buildSystem = "x86_64-linux";
           };
 
   in
@@ -206,11 +209,13 @@
                       fi
 
                       cp ${pkgs.callPackage ./testing/qemu-efi.nix {}} ./QEMU_EFI.img
+                      chmod +w ./QEMU_EFI.img
 
                       ${pkgs.qemu}/bin/${qemu-bin} \
                         -drive file=/tmp/${os}-img \
+                        -cpu max \
                         -smp 2 \
-                        -m 2500 \
+                        -m 4000 \
                         -netdev user,hostfwd=tcp::$port-:22,id=n1 \
                         -device virtio-net-pci,netdev=n1 \
                         ${optionalString (! debug) "-nographic"} \
@@ -232,7 +237,7 @@
 
                     echo -e "\n\nsetting up machine via ssh"
                     $sshRoot mkdir -p /np_tmp
-                    $sshRoot mount -t tmpfs /bin/true /np_tmp
+                    $sshRoot "test -e /np_tmp/.nix-portable || mount -t tmpfs -o size=3g /bin/true /np_tmp"
                     $sshRoot mkdir -p /home/test/.ssh
                     echo "uploading ssh key"
                     $scp ${./testing}/id_ed25519.pub root@localhost:/home/test/.ssh/authorized_keys
@@ -242,6 +247,7 @@
 
                     echo "upload the nix-portable executable"
                     $scp ${self.packages."${system}".nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
+                    $ssh chmod +w /home/test/nix-portable
 
 
                     echo -e "\n\nstarting to test nix-portable"

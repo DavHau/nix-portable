@@ -41,7 +41,7 @@ jobs:
     - name: Install binfmt support
       run: sudo apt-get install -y
 
-    - run: 'nix build --option system ${{ matrix.system }} -L .#defaultPackage.${{ matrix.system }}'
+    - run: 'nix build --option extra-platforms ${{ matrix.system }} -L .#defaultPackage.${{ matrix.system }}'
 
     - name: Archive result
       uses: actions/upload-artifact@v2

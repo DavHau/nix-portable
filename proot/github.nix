@@ -6,16 +6,16 @@
 with builtins;
 
 let
-  version = "5.2.0";
+  version = "5.3.0";
 
   systems = {
     x86_64-linux = {
       url = "https://github.com/proot-me/proot/releases/download/v${version}/proot-v${version}-x86_64-static";
-      sha256 = "1w729a5fz9wcxshn7vy4yg96qj59sxmd2by1gcl6nz57qjrl61pb";
+      sha256 = "1nmllvdhlbdlgffq6x351p0zfgv202qfy8vhf26z0v8y435j1syi";
     };
     aarch64-linux = {
       url = "https://github.com/proot-me/proot/releases/download/v${version}/proot-v${version}-aarch64-static";
-      sha256 = "17ghp5n2jz38c4qk88yjc9cvdx9pcinmf2v7i7klnmzq5wzbkrzi";
+      sha256 = "0icaag29a6v214am4cbdyvncjs63f02lad2qrcfmnbwch6kv247s";
     };
     armv7l-linux = {
       url = "https://github.com/proot-me/proot/releases/download/v${version}/proot-v${version}-arm-static";
