@@ -3,11 +3,6 @@
 
     nixpkgs.url = "nixpkgs/nixos-21.11";
 
-    # the nixpkgs version shipped with the nix-portable executable
-    # TODO: find out why updating this leads to error when building pkgs.hello:
-    # Error: checking whether build environment is sane... ls: cannot access './configure': No such file or directory
-    defaultChannel.url = "nixpkgs/nixos-20.09";
-
     nix.url = "nix/2.5.1";
     nix.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -103,7 +98,6 @@
 
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
-          pkgsDefaultChannel = import inp.defaultChannel { inherit system crossSystem; };
           pkgs = import inp.nixpkgs { inherit system crossSystem; };
           pkgsCached = if crossSystem == null then pkgs else import inp.nixpkgs { system = crossSystem; };
 
@@ -114,12 +108,10 @@
           # crashes if nixpkgs updated: error: executing 'git': No such file or directory
           pkgs.callPackage ./default.nix {
 
-            inherit proot;
-
-            pkgs = pkgsDefaultChannel;
+            inherit proot pkgs;
 
             lib = inp.nixpkgs.lib;
-            compression = "zstd -3 -T1";
+            compression = "zstd -18 -T0";
 
             nix = inp.nix.packages."${system}".nix;
 
