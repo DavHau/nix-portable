@@ -212,7 +212,7 @@ let
       sslBind="\$(realpath \$SSL_CERT_FILE) \$dir/ca-bundle.crt"
       export SSL_CERT_FILE="\$dir/ca-bundle.crt"
     else
-      sslBind=/etc/ssl
+      sslBind="/etc/ssl /etc/ssl"
     fi
 
 
@@ -293,7 +293,7 @@ let
       while :; do
         if [ -n "\$1" ]; then
           from="\$1"; shift
-          to="\$1"; shift
+          to="\$1"; shift || { echo "no bind destination provided for \$from!"; exit 3; }
           binds="\$binds \$arg \$from\$sep\$to";
         else
           break
