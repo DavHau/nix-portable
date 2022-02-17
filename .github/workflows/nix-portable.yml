@@ -3,7 +3,7 @@ name: "build and test"
 on:
   pull_request:
   push:
-    branches: [ "*" ]
+    branches: [ "ci", "master" ]
 jobs:
 
 
