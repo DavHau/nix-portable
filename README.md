@@ -84,7 +84,7 @@ In case the automatically selected runtime doesn't work, use the follwing enviro
 ### Environment Variables
 The following environment variables are optional and can be used to override the default behaviour of nix-portable
 ```
-NP_DEBUG      (1 = debug msgs; 2 = 'set -e' for nix-portable)
+NP_DEBUG      (1 = debug msgs; 2 = 'set -x' for nix-portable)
 NP_GIT        specify path to the git executable
 NP_LOCATION   where to put the `.nix-portable` dir. (defaults to `$HOME`)
 NP_RUNTIME    which runtime to use (must be 'bwrap' or 'proot')
