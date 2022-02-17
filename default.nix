@@ -394,7 +394,7 @@ let
     ### select executable
     # the executable can either be selected by executing './nix-portable BIN_NAME',
     # or by symlinking to nix-portable, in which case the name of the symlink selectes the binary
-    if [ "\$(basename \$0)" == "nix-portable" ]; then
+    if [[ "\$(basename \$0)" == nix-portable* ]]; then
       if [ -z "\$1" ]; then
         echo "Error: please specify the nix binary to execute"
         echo "Alternatively symlink against \$0"
