@@ -47,7 +47,7 @@ jobs:
     - name: Archive result
       uses: actions/upload-artifact@v2
       with:
-        name: nix-portable
+        name: nix-portable-${{ matrix.system }}
         path: result/bin/nix-portable
 
 
