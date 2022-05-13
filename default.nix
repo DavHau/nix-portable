@@ -130,7 +130,6 @@ let
     # Nix portable ships its own nix.conf
     export NIX_CONF_DIR=\$dir/conf/
 
-
     create_nix_conf(){
       sandbox=\$1
 
@@ -139,7 +138,7 @@ let
 
       echo "build-users-group = " > \$dir/conf/nix.conf
       echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
-      echo "ignored-acls = security.selinux system.nfs4_acl" >> \$dir/conf/nix.conf
+      echo "ignored-acls = security.selinux system.nfs4_acl security.csm" >> \$dir/conf/nix.conf
       echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
       echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
 
