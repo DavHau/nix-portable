@@ -210,10 +210,10 @@ let
       fi
     fi
     if [ -n "\$SSL_CERT_FILE" ]; then
-      sslBind="\$(realpath "\$SSL_CERT_FILE") \$dir/ca-bundle.crt"
+      sslBind=("\$(realpath "\$SSL_CERT_FILE")" "\$dir/ca-bundle.crt")
       export SSL_CERT_FILE="\$dir/ca-bundle.crt"
     else
-      sslBind="/etc/ssl /etc/ssl"
+      sslBind=(/etc/ssl /etc/ssl)
     fi
 
 
@@ -244,7 +244,7 @@ let
       # we need to collect all top level directories and bind them inside an empty root
 
 
-      toBind=""
+      toBind=()
       find / -mindepth 1 -maxdepth 1 -not -name nix -not -name dev |
       while read p; do
         if [ -e "\$p" ]; then
@@ -252,9 +252,9 @@ let
           if [ -e "\$real" ]; then
             if [[ "\$real" == /nix/store/* ]]; then
               storePath=\$(storePathOfFile "\$real")
-              toBind="\$toBind \$storePath \$storePath"
+              toBind=("\''${toBind[@]}" "\$storePath" "\$storePath")
             else
-              toBind="\$toBind \$real \$p"
+              toBind=("\''${toBind[@]}" "\$real" "\$p")
             fi
           fi
         fi
@@ -270,9 +270,9 @@ let
           if [ -e "\$real" ]; then
             if [[ "\$real" == /nix/store/* ]]; then
               storePath=\$(storePathOfFile "\$real")
-              toBind="\$toBind \$storePath \$storePath"
+              toBind=("\''${toBind[@]}" "\$storePath" "\$storePath")
             else
-              toBind="\$toBind \$real \$real"
+              toBind=("\''${toBind[@]}" "\$real" "\$real")
             fi
           fi
         fi
@@ -282,7 +282,7 @@ let
       # to a /nix/store path which doesn't exit inside the wrapped env
       # we fix this by binding busybox/bin to /bin
       if test -s /bin/sh && [[ "\$(realpath /bin/sh)" == /nix/store/* ]]; then
-        toBind="\$toBind \$dir/busybox/bin /bin"
+        toBind=("\''${toBind[@]}" "\$dir/busybox/bin" /bin)
       fi
     }
 
@@ -290,12 +290,12 @@ let
     makeBindArgs(){
       arg=\$1; shift
       sep=\$1; shift
-      binds=""
+      binds=()
       while :; do
         if [ -n "\$1" ]; then
           from="\$1"; shift
           to="\$1"; shift || { echo "no bind destination provided for \$from!"; exit 3; }
-          binds="\$binds \$arg \$from\$sep\$to";
+          binds=("\''${binds[@]}" "\$arg" "\$from\$sep\$to");
         else
           break
         fi
@@ -326,22 +326,22 @@ let
     fi
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
       collectBinds
-      makeBindArgs --bind " " \$toBind \$sslBind
+      makeBindArgs --bind " " "\''${toBind[@]}" "\''${sslBind[@]}"
       run="\''${NP_BWRAP@Q} \$BWRAP_ARGS \\
         --bind \''${dir@Q}/emptyroot /\\
         --dev-bind /dev /dev\\
         --bind \''${dir@Q}/ /nix\\
-        \$binds"
+        \''${binds[@]@Q}"
         # --bind \''${dir@Q}/busybox/bin/busybox /bin/sh\\
     else
       # proot
       collectBinds
-      makeBindArgs -b ":" \$toBind \$sslBind
+      makeBindArgs -b ":" "\''${toBind[@]}" "\''${sslBind[@]}"
       run="\''${NP_PROOT@Q} \$PROOT_ARGS\\
         -r \''${dir@Q}/emptyroot\\
         -b /dev:/dev\\
         -b \''${dir@Q}/store:/nix/store\\
-        \$binds"
+        \''${binds[@]@Q}"
         # -b \''${dir@Q}/busybox/bin/busybox:/bin/sh\\
     fi
     debug "base command will be: \$run"
