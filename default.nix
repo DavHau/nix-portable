@@ -132,7 +132,7 @@ let
 
 
     create_nix_conf(){
-      sandbox=\$1
+      sandbox="\$1"
 
       mkdir -p "\$dir"/conf/
       rm -f "\$dir"/conf/nix.conf
@@ -232,8 +232,8 @@ let
 
 
     storePathOfFile(){
-      file="\$(realpath \$1)"
-      sPath="\$(echo "\$file" | awk -F "/" 'BEGIN{OFS="/";}{print \$2,\$3,\$4}')"
+      file="\$(realpath "\$1")"
+      sPath="\$(echo "\$file" | awk -F "/" 'BEGIN{OFS="/";}{print "\$2,\$3,\$4"}')"
       echo "/\$sPath"
     }
 
@@ -288,8 +288,8 @@ let
 
 
     makeBindArgs(){
-      arg=\$1; shift
-      sep=\$1; shift
+      arg="\$1"; shift
+      sep="\$1"; shift
       binds=()
       while :; do
         if [ -n "\$1" ]; then
@@ -396,20 +396,20 @@ let
     ### select executable
     # the executable can either be selected by executing './nix-portable BIN_NAME',
     # or by symlinking to nix-portable, in which case the name of the symlink selectes the binary
-    if [[ "\$(basename \$0)" == nix-portable* ]]; then
+    if [[ "\$(basename "\$0")" == nix-portable* ]]; then
       if [ -z "\$1" ]; then
         echo "Error: please specify the nix binary to execute"
         echo "Alternatively symlink against \$0"
         exit 1
       elif [ "\$1" == "debug" ]; then
-        bin="\$(which \$2)"
+        bin="\$(which "\$2")"
         shift; shift
       else
         bin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/\$1"
         shift
       fi
     else
-      bin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/\$(basename \$0)"
+      bin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/\$(basename "\$0")"
     fi
 
 
