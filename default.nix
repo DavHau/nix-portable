@@ -326,22 +326,22 @@ let
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
       collectBinds
       makeBindArgs --bind " " \$toBind \$sslBind
-      run="\$NP_BWRAP \$BWRAP_ARGS \\
-        --bind \$dir/emptyroot /\\
+      run="\''${NP_BWRAP@Q} \$BWRAP_ARGS \\
+        --bind \''${dir@Q}/emptyroot /\\
         --dev-bind /dev /dev\\
-        --bind \$dir/ /nix\\
+        --bind \''${dir@Q}/ /nix\\
         \$binds"
-        # --bind \$dir/busybox/bin/busybox /bin/sh\\
+        # --bind \''${dir@Q}/busybox/bin/busybox /bin/sh\\
     else
       # proot
       collectBinds
       makeBindArgs -b ":" \$toBind \$sslBind
-      run="\$NP_PROOT \$PROOT_ARGS\\
-        -r \$dir/emptyroot\\
+      run="\''${NP_PROOT@Q} \$PROOT_ARGS\\
+        -r \''${dir@Q}/emptyroot\\
         -b /dev:/dev\\
-        -b \$dir/store:/nix/store\\
+        -b \''${dir@Q}/store:/nix/store\\
         \$binds"
-        # -b \$dir/busybox/bin/busybox:/bin/sh\\
+        # -b \''${dir@Q}/busybox/bin/busybox:/bin/sh\\
     fi
     debug "base command will be: \$run"
 
@@ -384,7 +384,7 @@ let
     if [ -n "\$missing" ]; then
       debug "registering new store paths to DB"
       reg="$(cat ${storeTar}/closureInfo/registration)"
-      cmd="\$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
+      cmd="\$run \''${dir@Q}/store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
       debug "running command: \$cmd"
       echo "\$reg" | "\$cmd"
     fi
@@ -481,7 +481,7 @@ let
       debug "running command: \$NP_RUN \$bin \$@"
       exec "\$NP_RUN" "\$bin" "\$@"
     else
-      cmd="\$NP_RUN \$bin \$@"
+      cmd="\''${NP_RUN@Q} \''${bin@Q} \$@"
       debug "running command: \$cmd"
       exec "\$NP_RUN" "\$bin" "\$@"
     fi
