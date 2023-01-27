@@ -170,6 +170,7 @@ let
     $(cat ${busybox}/bin/busybox | base64)
     END
       busyBins="${toString (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${inp.busybox}/bin")))}"
+      # NOTE: Technically this isn't properly escaped/quoted. But the generated code looks fine as it's all just single words anyway. And if we replace it with a Bash array without per-element quoting/escaping, then it becomes invalid syntax as two of the elements are square bracket tokens.
       for bin in \$busyBins; do
         [ ! -e "\$dir/busybox/bin/\$bin" ] && ln -s busybox "\$dir/busybox/bin/\$bin"
       done
@@ -241,11 +242,11 @@ let
       ### gather paths to bind for proot
       # we cannot bind / to / without running into a lot of trouble, therefore
       # we need to collect all top level directories and bind them inside an empty root
-      pathsTopLevel="\$(find / -mindepth 1 -maxdepth 1 -not -name nix -not -name dev)"
 
 
       toBind=""
-      for p in \$pathsTopLevel; do
+      find / -mindepth 1 -maxdepth 1 -not -name nix -not -name dev |
+      while read p; do
         if [ -e "\$p" ]; then
           real=\$(realpath "\$p")
           if [ -e "\$real" ]; then
@@ -261,9 +262,9 @@ let
 
 
       # TODO: add /var/run/dbus/system_bus_socket
-      paths="/etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime \$HOME"
+      paths=(/etc/host.conf /etc/hosts /etc/hosts.equiv /etc/mtab /etc/netgroup /etc/networks /etc/passwd /etc/group /etc/nsswitch.conf /etc/resolv.conf /etc/localtime "\$HOME")
 
-      for p in \$paths; do
+      for p in "\''${paths[@]}"; do
         if [ -e "\$p" ]; then
           real=\$(realpath "\$p")
           if [ -e "\$real" ]; then
@@ -358,6 +359,7 @@ let
     # We only unpack missing store paths from the tar archive.
     # xz must be in PATH
     index="$(cat ${storeTar}/index)"
+    # TODO: Escape/quote this— *Probably* `cat \''${storeTar}/index | while read path; do`? (I'm not sure if the output is line-separated.)
 
     export missing=\$(
       for path in \$index; do
