@@ -61,8 +61,8 @@ let
     '';
 
   installBin = pkg: bin: ''
-    unzip -qqoj "\$self" ${ lib.removePrefix "/" "${pkg}/bin/${bin}"} -d \$dir/bin
-    chmod +wx \$dir/bin/${bin};
+    unzip -qqoj "\$self" ${ lib.removePrefix "/" "${pkg}/bin/${bin}"} -d "\$dir"/bin
+    chmod +wx "\$dir"/bin/${bin};
   '';
 
   caBundleZstd = pkgs.runCommand "cacerts" {} "cat ${cacert}/etc/ssl/certs/ca-bundle.crt | ${inp.zstd}/bin/zstd -19 > $out";
@@ -113,7 +113,7 @@ let
     # user specified location for program files and nix store
     [ -z "\$NP_LOCATION" ] && NP_LOCATION="\$HOME"
     dir="\$NP_LOCATION/.nix-portable"
-    mkdir -p \$dir/bin
+    mkdir -p "\$dir"/bin
     # santize the tmpbin directory
     rm -rf "\$dir/tmpbin"
     # create a directory to hold executable symlinks for overriding
@@ -121,29 +121,29 @@ let
 
     # the fingerprint being present inside a file indicates that
     # this version of nix-portable has already been initialized
-    if test -e \$dir/conf/fingerprint && [ "\$(cat \$dir/conf/fingerprint)" == "\$fingerprint" ]; then
+    if test -e "\$dir"/conf/fingerprint && [ "\$(cat "\$dir"/conf/fingerprint)" == "\$fingerprint" ]; then
       newNPVersion=false
     else
       newNPVersion=true
     fi
 
     # Nix portable ships its own nix.conf
-    export NIX_CONF_DIR=\$dir/conf/
+    export NIX_CONF_DIR="\$dir"/conf/
 
 
     create_nix_conf(){
       sandbox=\$1
 
-      mkdir -p \$dir/conf/
-      rm -f \$dir/conf/nix.conf
+      mkdir -p "\$dir"/conf/
+      rm -f "\$dir"/conf/nix.conf
 
-      echo "build-users-group = " > \$dir/conf/nix.conf
-      echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
-      echo "ignored-acls = security.selinux system.nfs4_acl" >> \$dir/conf/nix.conf
-      echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
-      echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
+      echo "build-users-group = " > "\$dir"/conf/nix.conf
+      echo "experimental-features = nix-command flakes" >> "\$dir"/conf/nix.conf
+      echo "ignored-acls = security.selinux system.nfs4_acl" >> "\$dir"/conf/nix.conf
+      echo "use-sqlite-wal = false" >> "\$dir"/conf/nix.conf
+      echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> "\$dir"/conf/nix.conf
 
-      echo "sandbox = \$sandbox" >> \$dir/conf/nix.conf
+      echo "sandbox = \$sandbox" >> "\$dir"/conf/nix.conf
     }
 
 
@@ -162,10 +162,10 @@ let
 
       debug "installing files"
 
-      mkdir -p \$dir/emptyroot
+      mkdir -p "\$dir"/emptyroot
 
       # install busybox
-      mkdir -p \$dir/busybox/bin
+      mkdir -p "\$dir"/busybox/bin
       (base64 -d> "\$dir/busybox/bin/busybox" && chmod +x "\$dir/busybox/bin/busybox") << END
     $(cat ${busybox}/bin/busybox | base64)
     END
@@ -182,7 +182,7 @@ let
       ${installBin bwrap "bwrap"}
 
       # install ssl cert bundle
-      unzip -poj "\$self" ${ lib.removePrefix "/" "${caBundleZstd}"} | \$dir/bin/zstd -d > \$dir/ca-bundle.crt
+      unzip -poj "\$self" ${ lib.removePrefix "/" "${caBundleZstd}"} | "\$dir"/bin/zstd -d > "\$dir"/ca-bundle.crt
 
       create_nix_conf false
 
@@ -203,13 +203,13 @@ let
         debug "found /etc/ssl/certs/ca-certificates.crt with real path \$SSL_CERT_FILE"
       elif [ ! -e /etc/ssl/certs ]; then
         debug "/etc/ssl/certs does not exist. Will use certs from nixpkgs."
-        export SSL_CERT_FILE=\$dir/ca-bundle.crt
+        export SSL_CERT_FILE="\$dir"/ca-bundle.crt
       else
         debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
       fi
     fi
     if [ -n "\$SSL_CERT_FILE" ]; then
-      sslBind="\$(realpath \$SSL_CERT_FILE) \$dir/ca-bundle.crt"
+      sslBind="\$(realpath "\$SSL_CERT_FILE") \$dir/ca-bundle.crt"
       export SSL_CERT_FILE="\$dir/ca-bundle.crt"
     else
       sslBind="/etc/ssl /etc/ssl"
@@ -232,7 +232,7 @@ let
 
     storePathOfFile(){
       file=\$(realpath \$1)
-      sPath="\$(echo \$file | awk -F "/" 'BEGIN{OFS="/";}{print \$2,\$3,\$4}')"
+      sPath="\$(echo "\$file" | awk -F "/" 'BEGIN{OFS="/";}{print \$2,\$3,\$4}')"
       echo "/\$sPath"
     }
 
@@ -247,10 +247,10 @@ let
       toBind=""
       for p in \$pathsTopLevel; do
         if [ -e "\$p" ]; then
-          real=\$(realpath \$p)
+          real=\$(realpath "\$p")
           if [ -e "\$real" ]; then
             if [[ "\$real" == /nix/store/* ]]; then
-              storePath=\$(storePathOfFile \$real)
+              storePath=\$(storePathOfFile "\$real")
               toBind="\$toBind \$storePath \$storePath"
             else
               toBind="\$toBind \$real \$p"
@@ -265,10 +265,10 @@ let
 
       for p in \$paths; do
         if [ -e "\$p" ]; then
-          real=\$(realpath \$p)
+          real=\$(realpath "\$p")
           if [ -e "\$real" ]; then
             if [[ "\$real" == /nix/store/* ]]; then
-              storePath=\$(storePathOfFile \$real)
+              storePath=\$(storePathOfFile "\$real")
               toBind="\$toBind \$storePath \$storePath"
             else
               toBind="\$toBind \$real \$real"
@@ -306,14 +306,14 @@ let
     ### select container runtime
     debug "figuring out which runtime to use"
     [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>/dev/null) || true
-    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$dir/bin/bwrap
+    [ -z "\$NP_BWRAP" ] && NP_BWRAP="\$dir"/bin/bwrap
     debug "bwrap executable: \$NP_BWRAP"
     [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>/dev/null) || true
-    [ -z "\$NP_PROOT" ] && NP_PROOT=\$dir/bin/proot
+    [ -z "\$NP_PROOT" ] && NP_PROOT="\$dir"/bin/proot
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
       # check if bwrap works properly
-      if \$NP_BWRAP --bind \$dir/emptyroot / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
+      if "\$NP_BWRAP" --bind "\$dir"/emptyroot / --bind "\$dir"/ /nix --bind "\$dir"/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -349,8 +349,8 @@ let
 
     ### setup environment
     export NIX_PATH="\$dir/channels:nixpkgs=\$dir/channels/nixpkgs"
-    mkdir -p \$dir/channels
-    [ -h \$dir/channels/nixpkgs ] || ln -s ${nixpkgsSrc} \$dir/channels/nixpkgs
+    mkdir -p "\$dir"/channels
+    [ -h "\$dir"/channels/nixpkgs ] || ln -s ${nixpkgsSrc} "\$dir"/channels/nixpkgs
 
 
     ### install nix store
@@ -361,8 +361,8 @@ let
 
     export missing=\$(
       for path in \$index; do
-        if [ ! -e \$dir/store/\$(basename \$path) ]; then
-          echo "nix/store/\$(basename \$path)"
+        if [ ! -e "\$dir"/store/\$(basename "\$path") ]; then
+          echo "nix/store/\$(basename "\$path")"
         fi
       done
     )
@@ -370,15 +370,15 @@ let
     if [ -n "\$missing" ]; then
       debug "extracting missing store paths"
       (
-        mkdir -p \$dir/tmp \$dir/store/
-        rm -rf \$dir/tmp/*
-        cd \$dir/tmp
+        mkdir -p "\$dir"/tmp "\$dir"/store/
+        rm -rf "\$dir"/tmp/*
+        cd "\$dir"/tmp
         unzip -qqp "\$self" ${ lib.removePrefix "/" "${storeTar}/tar"} \
-          | \$dir/bin/zstd -d \
-          | tar -x \$missing --strip-components 2
-        mv \$dir/tmp/* \$dir/store/
+          | "\$dir"/bin/zstd -d \
+          | tar -x "\$missing" --strip-components 2
+        mv "\$dir"/tmp/* "\$dir"/store/
       )
-      rm -rf \$dir/tmp
+      rm -rf "\$dir"/tmp
     fi
 
     if [ -n "\$missing" ]; then
@@ -386,7 +386,7 @@ let
       reg="$(cat ${storeTar}/closureInfo/registration)"
       cmd="\$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
       debug "running command: \$cmd"
-      echo "\$reg" | \$cmd
+      echo "\$reg" | "\$cmd"
     fi
 
 
@@ -422,13 +422,13 @@ let
     if [ "\$newNPVersion" == "true" ] || [ "\$lastRuntime" != "\$NP_RUNTIME" ]; then
       nixBin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-build"
       debug "Testing if nix can build stuff without sandbox"
-      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false >&3 2>&3; then
+      if ! "\$run" "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false >&3 2>&3; then
         echo "Fatal error: nix is unable to build packages"
         exit 1
       fi
 
       debug "Testing if nix sandox is functional"
-      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true >&3 2>&3; then
+      if ! "\$run" "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true >&3 2>&3; then
         debug "Sandbox doesn't work -> disabling sandbox"
         create_nix_conf false
       else
@@ -443,8 +443,8 @@ let
     if [ "\$newNPVersion" == "true" ]; then
       echo -n "\$fingerprint" > "\$dir/conf/fingerprint"
     fi
-    if [ "\$lastRuntime" != \$NP_RUNTIME ]; then
-      echo -n \$NP_RUNTIME > "\$dir/conf/last_runtime"
+    if [ "\$lastRuntime" != "\$NP_RUNTIME" ]; then
+      echo -n "\$NP_RUNTIME" > "\$dir/conf/last_runtime"
     fi
 
 
@@ -458,9 +458,9 @@ let
 
 
     ### install git via nix, if git installation is not in /nix path
-    if \$doInstallGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
+    if "\$doInstallGit" && [ ! -e "\$dir"/store${lib.removePrefix "/nix/store" git.out} ] ; then
       echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'"
-      \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
+      "\$run" "\$dir"/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
         (import ${nixpkgsSrc} {}).${gitAttribute}.out
       "
     else
@@ -469,7 +469,7 @@ let
 
     ### override the possibly existing git in the environment with the installed one
     # excluding the case NP_GIT is set.
-    if \$doInstallGit; then
+    if "\$doInstallGit"; then
       export PATH="${git.out}/bin:\$PATH"
     fi
 
@@ -479,11 +479,11 @@ let
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
     if [ "\$NP_RUNTIME" == "proot" ]; then
       debug "running command: \$NP_RUN \$bin \$@"
-      exec \$NP_RUN \$bin "\$@"
+      exec "\$NP_RUN" "\$bin" "\$@"
     else
       cmd="\$NP_RUN \$bin \$@"
       debug "running command: \$cmd"
-      exec \$NP_RUN \$bin "\$@"
+      exec "\$NP_RUN" "\$bin" "\$@"
     fi
   '';
 
