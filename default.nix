@@ -197,10 +197,10 @@ let
     if [ -z "\$SSL_CERT_FILE" ]; then
       debug "SSL_CERT_FILE not defined. trying to find certs automatically"
       if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
-        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-bundle.crt)
+        export SSL_CERT_FILE="\$(realpath /etc/ssl/certs/ca-bundle.crt)"
         debug "found /etc/ssl/certs/ca-bundle.crt with real path \$SSL_CERT_FILE"
       elif [ -e /etc/ssl/certs/ca-certificates.crt ]; then
-        export SSL_CERT_FILE=\$(realpath /etc/ssl/certs/ca-certificates.crt)
+        export SSL_CERT_FILE="\$(realpath /etc/ssl/certs/ca-certificates.crt)"
         debug "found /etc/ssl/certs/ca-certificates.crt with real path \$SSL_CERT_FILE"
       elif [ ! -e /etc/ssl/certs ]; then
         debug "/etc/ssl/certs does not exist. Will use certs from nixpkgs."
@@ -232,7 +232,7 @@ let
 
 
     storePathOfFile(){
-      file=\$(realpath \$1)
+      file="\$(realpath \$1)"
       sPath="\$(echo "\$file" | awk -F "/" 'BEGIN{OFS="/";}{print \$2,\$3,\$4}')"
       echo "/\$sPath"
     }
@@ -248,10 +248,10 @@ let
       find / -mindepth 1 -maxdepth 1 -not -name nix -not -name dev |
       while read p; do
         if [ -e "\$p" ]; then
-          real=\$(realpath "\$p")
+          real="\$(realpath "\$p")"
           if [ -e "\$real" ]; then
             if [[ "\$real" == /nix/store/* ]]; then
-              storePath=\$(storePathOfFile "\$real")
+              storePath="\$(storePathOfFile "\$real")"
               toBind=("\''${toBind[@]}" "\$storePath" "\$storePath")
             else
               toBind=("\''${toBind[@]}" "\$real" "\$p")
@@ -266,10 +266,10 @@ let
 
       for p in "\''${paths[@]}"; do
         if [ -e "\$p" ]; then
-          real=\$(realpath "\$p")
+          real="\$(realpath "\$p")"
           if [ -e "\$real" ]; then
             if [[ "\$real" == /nix/store/* ]]; then
-              storePath=\$(storePathOfFile "\$real")
+              storePath="\$(storePathOfFile "\$real")"
               toBind=("\''${toBind[@]}" "\$storePath" "\$storePath")
             else
               toBind=("\''${toBind[@]}" "\$real" "\$real")
@@ -306,10 +306,10 @@ let
 
     ### select container runtime
     debug "figuring out which runtime to use"
-    [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>/dev/null) || true
+    [ -z "\$NP_BWRAP" ] && NP_BWRAP="\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>/dev/null)" || true
     [ -z "\$NP_BWRAP" ] && NP_BWRAP="\$dir"/bin/bwrap
     debug "bwrap executable: \$NP_BWRAP"
-    [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>/dev/null) || true
+    [ -z "\$NP_PROOT" ] && NP_PROOT="\$(PATH="\$PATH_OLD:\$PATH" which proot 2>/dev/null)" || true
     [ -z "\$NP_PROOT" ] && NP_PROOT="\$dir"/bin/proot
     debug "proot executable: \$NP_PROOT"
     if [ -z "\$NP_RUNTIME" ]; then
@@ -361,13 +361,13 @@ let
     index="$(cat ${storeTar}/index)"
     # TODO: Escape/quote this— *Probably* `cat \''${storeTar}/index | while read path; do`? (I'm not sure if the output is line-separated.)
 
-    export missing=\$(
+    export missing="\$(
       for path in \$index; do
-        if [ ! -e "\$dir"/store/\$(basename "\$path") ]; then
+        if [ ! -e "\$dir/store/\$(basename "\$path")" ]; then
           echo "nix/store/\$(basename "\$path")"
         fi
       done
-    )
+    )"
 
     if [ -n "\$missing" ]; then
       debug "extracting missing store paths"
@@ -415,7 +415,7 @@ let
 
 
     ### check which runtime has been used previously
-    lastRuntime=\$(cat "\$dir/conf/last_runtime" 2>&3) || true
+    lastRuntime="\$(cat "\$dir/conf/last_runtime" 2>&3)" || true
 
 
 
