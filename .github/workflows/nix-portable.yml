@@ -2,6 +2,7 @@
 name: "build and test"
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches: [ "*" ]
 jobs:
@@ -10,9 +11,9 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       fail-fast: false
-      continue-on-error: true
       matrix:
         system: [ x86_64-linux, aarch64-linux ]
 
@@ -57,9 +58,9 @@ jobs:
     name: Test on distro via qemu
     needs: build
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       fail-fast: false
-      continue-on-error: true
       matrix:
         # qemu_os: [ arch, centos7, centos8, debian, nixos, ubuntu ]
         # TODO: fix and re-activate tests
