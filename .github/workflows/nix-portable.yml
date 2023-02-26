@@ -4,7 +4,7 @@ on:
   pull_request:
   workflow_dispatch:
   push:
-    branches: [ "*" ]
+    branches: [ "ci" ]
 jobs:
 
 
@@ -28,6 +28,7 @@ jobs:
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes
+          extra-platforms = ${{ matrix.system }}
 
     - uses: cachix/cachix-action@v12
       with:
@@ -43,7 +44,7 @@ jobs:
     - name: Install binfmt support
       run: sudo apt-get install -y
 
-    - run: 'nix build -L .#defaultPackage.${{ matrix.system }} --extra-platforms "${{ matrix.system }}"'
+    - run: 'nix build -L .#defaultPackage.${{ matrix.system }}'
 
     - name: Archive result
       uses: actions/upload-artifact@v3
@@ -55,7 +56,7 @@ jobs:
 
 
   test_qemu:
-    name: Test on distro via qemu
+    name: Test via qemu
     needs: build
     if: true
     runs-on: ubuntu-latest
@@ -63,9 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # qemu_os: [ arch, centos7, centos8, debian, nixos, ubuntu ]
-        # TODO: fix and re-activate tests
-        qemu_os: [ centos7, debian, ubuntu, debian-aarch64 ]
+        qemu_os: [ arch, centos7, debian, fedora, nixos, ubuntu, debian-aarch64 ]
     steps:
 
     - uses: actions/checkout@v3
@@ -86,6 +85,37 @@ jobs:
 
     - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}'
 
+
+
+  test_nix-static:
+    name: Test nix-static via qemu
+    needs: build
+    if: true
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        qemu_os: [ arch, centos7, debian, fedora, nixos, ubuntu, debian-aarch64 ]
+    steps:
+
+    - uses: actions/checkout@v3
+      with:
+          # Nix Flakes doesn't work on shallow clones
+          fetch-depth: 0
+
+    - uses: cachix/install-nix-action@v19
+      with:
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+          extra-platforms = ${{ matrix.system }}
+
+    - uses: cachix/cachix-action@v12
+      with:
+        name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+    - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}-nix-static'
 
 
   test_docker:

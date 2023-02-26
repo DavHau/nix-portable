@@ -56,17 +56,19 @@
           # user namespaces are disabled on centos 7
           excludeRuntimes = [ "bwrap" ];
         };
-        centos8 = {
-          system = "x86_64-linux";
-          url = "https://cloud.centos.org/altarch/8/x86_64/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2";
-          sha256 = "7ec97062618dc0a7ebf211864abf63629da1f325578868579ee70c495bed3ba0";
-        };
         debian = {
           system = "x86_64-linux";
           url = "https://cdimage.debian.org/cdimage/openstack/archive/10.9.0/debian-10.9.0-openstack-amd64.qcow2";
           sha256 = "0mf9k3pgzighibly1sy3cjq7c761r3akp8mlgd878lwf006vqrky";
           # permissions for user namespaces not enabled by default
           excludeRuntimes = [ "bwrap" ];
+        };
+        fedora = {
+          system = "x86_64-linux";
+          url = "https://download.fedoraproject.org/pub/fedora/linux/releases/37/Cloud/x86_64/images/Fedora-Cloud-Base-37-1.7.x86_64.qcow2";
+          sha256 = "187k05x1a2r0rq0lbsxircvk7ckk0mifxxj5ayd4hrgf3v4vxfdm";
+          # TODO: fix issue with proot. Same as described above under `arch`.
+          excludeRuntimes = [ "proot" ];
         };
         nixos = {
           system = "x86_64-linux";
@@ -175,7 +177,9 @@
 
         apps = forAllSystems (system: pkgs:
           let
-            makeQemuPipelines = debug: mapAttrs' (os: img: let
+            makeQemuPipelines = mode: mapAttrs' (os: img: let
+              debug = mode == "debug";
+              suffix = if mode == "normal" then "" else "-${mode}";
               runtimes = filter (runtime: ! elem runtime (testImages."${os}".excludeRuntimes or []) ) [ "bwrap" "proot" ];
               img =
                 if testImages."${os}" ? img then testImages."${os}".img
@@ -186,18 +190,19 @@
                   "qemu-kvm"
                 else
                   "qemu-system-${lib.head (lib.splitString "-" system)}";
-              mkCmd = runtime: cmd': let
-                cmd = replaceStrings [''"''] [''\"''] cmd';
+              announce = cmd: ''echo -e "\ntesting cmd: ${cmd}"'';
+              escape = cmd: replaceStrings [''"''] [''\"''] cmd;
+              mkCmd = runtime: cmd: let
                 vars = "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL NP_LOCATION=/np_tmp";
               in ''
-                echo -e "\ntesting cmd: ${cmd}"
-                $ssh "${vars} /home/test/nix-portable ${cmd}"
+                ${announce (escape cmd)}
+                $ssh "${vars} /home/test/nix-portable ${escape cmd}"
               '';
               testCommands = runtime:
                 concatStringsSep "\n" (map (mkCmd runtime) (modCommand runtime));
             in
               nameValuePair
-                "job-qemu-${os}${optionalString debug "-debug"}"
+                "job-qemu-${os}${suffix}"
                 {
                   type = "app";
                   program = toString (pkgs.writeScript "job-qemu-${os}" ''
@@ -262,7 +267,8 @@
                     echo -e "\n\nsetting up machine via ssh"
                     $sshRoot mkdir -p /np_tmp
                     $sshRoot "test -e /np_tmp/.nix-portable || mount -t tmpfs -o size=3g /bin/true /np_tmp"
-                    $sshRoot mkdir -p /home/test/.ssh
+                    $sshRoot "mount -t tmpfs -o size=3g /bin/true /home"
+                    $sshRoot "mkdir -p /home/test/.ssh && chown -R test /home/test && chmod 700 /home/test/.ssh"
                     echo "uploading ssh key"
                     $scp ${./testing}/id_ed25519.pub root@localhost:/home/test/.ssh/authorized_keys
                     $sshRoot chown -R test /home/test
@@ -273,12 +279,26 @@
                     $scp ${self.packages."${system}".nix-portable}/bin/nix-portable test@localhost:/home/test/nix-portable
                     $ssh chmod +w /home/test/nix-portable
 
+                    ${optionalString (mode != "nix-static") ''
+                      echo -e "\n\nstarting to test nix-portable"
+                      # test some nix commands
+                      NP_DEBUG=''${NP_DEBUG:-1}
+                      ${concatStringsSep "\n\n" (forEach runtimes testCommands)}
+                    ''}
 
-                    echo -e "\n\nstarting to test nix-portable"
-
-                    # test some nix commands
-                    NP_DEBUG=''${NP_DEBUG:-1}
-                    ${concatStringsSep "\n\n" (forEach runtimes testCommands)}
+                    ${optionalString (mode == "nix-static") ''
+                      echo -e "\n\nstarting to test nix-static"
+                      # test some nix commands
+                      set -e
+                      $scp -r ${inp.nix.packages."${system}".nix-static}/bin test@localhost:/home/test/nix-static
+                      $scp -r ${pkgs.gitMinimal}/bin test@localhost:/home/test/git
+                      ${concatStringsSep "\n\n" (flip map commandsToTest (cmd: ''
+                        echo "testing cmd: ${escape cmd}"
+                        NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/tarball/${inp.defaultChannel.rev}"
+                        $ssh "NIX_PATH=$NIX_PATH PATH=\$PATH:\$HOME/git \$HOME/nix-static/${escape cmd} --extra-experimental-features 'nix-command flakes'"
+                      ''
+                      ))}
+                    ''}
 
                     echo "all tests succeeded"
 
@@ -290,7 +310,7 @@
             ) testImages;
         in
           # generate jobs with and without debug settings
-          makeQemuPipelines true // makeQemuPipelines false
+          makeQemuPipelines "debug" // makeQemuPipelines "normal" // makeQemuPipelines "nix-static"
           # add
           // {
             job-qemu-all.type = "app";
