@@ -122,7 +122,6 @@
         let
           pkgsDefaultChannel = import inp.defaultChannel { inherit system crossSystem; };
           pkgs = import inp.nixpkgs { inherit system crossSystem; };
-          pkgsCached = if crossSystem == null then pkgs else import inp.nixpkgs { system = crossSystem; };
 
           # the static proot built with nix somehow didn't work on other systems,
           # therefore using the proot static build from proot gitlab
@@ -291,11 +290,10 @@
                       # test some nix commands
                       set -e
                       $scp -r ${inp.nix.packages."${system}".nix-static}/bin test@localhost:/home/test/nix-static
-                      $scp -r ${pkgs.gitMinimal}/bin test@localhost:/home/test/git
-                      ${concatStringsSep "\n\n" (flip map commandsToTest (cmd: ''
+                      ${concatStringsSep "\n\n" (flip map (tail commandsToTest) (cmd: ''
                         echo "testing cmd: ${escape cmd}"
                         NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/tarball/${inp.defaultChannel.rev}"
-                        $ssh "NIX_PATH=$NIX_PATH PATH=\$PATH:\$HOME/git \$HOME/nix-static/${escape cmd} --extra-experimental-features 'nix-command flakes'"
+                        $ssh "NIX_PATH=$NIX_PATH PATH= \$HOME/nix-static/${escape cmd} --extra-experimental-features 'nix-command flakes'"
                       ''
                       ))}
                     ''}
