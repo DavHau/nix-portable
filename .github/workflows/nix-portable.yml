@@ -57,6 +57,7 @@ jobs:
   test_qemu:
     name: Test on distro via qemu
     needs: build
+    if: true
     runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
@@ -91,6 +92,7 @@ jobs:
   test_docker:
     name: Test inside docker container
     needs: build
+    if: true
     runs-on: ubuntu-latest
     steps:
 
@@ -116,6 +118,7 @@ jobs:
   test_github:
     name: Test inside github action
     needs: build
+    if: true
     runs-on: ubuntu-latest
     steps:
 
