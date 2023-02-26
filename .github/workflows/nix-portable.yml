@@ -21,7 +21,7 @@ jobs:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
 
-    - uses: cachix/install-nix-action@v12
+    - uses: cachix/install-nix-action@v19
       with:
         install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
         extra_nix_config: |
@@ -69,7 +69,7 @@ jobs:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
 
-    - uses: cachix/install-nix-action@v12
+    - uses: cachix/install-nix-action@v19
       with:
         install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
         extra_nix_config: |
@@ -96,7 +96,7 @@ jobs:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
 
-    - uses: cachix/install-nix-action@v12
+    - uses: cachix/install-nix-action@v19
       with:
         install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
         extra_nix_config: |
@@ -121,7 +121,7 @@ jobs:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
 
-    - uses: cachix/install-nix-action@v12
+    - uses: cachix/install-nix-action@v19
       with:
         install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
         extra_nix_config: |
