@@ -23,10 +23,8 @@ jobs:
 
     - uses: cachix/install-nix-action@v19
       with:
-        install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
         extra_nix_config: |
           experimental-features = nix-command flakes
-          extra-platforms = ${{ matrix.system }}
 
     - uses: cachix/cachix-action@v12
       with:
@@ -42,7 +40,7 @@ jobs:
     - name: Install binfmt support
       run: sudo apt-get install -y
 
-    - run: 'nix build -L .#defaultPackage.${{ matrix.system }}'
+    - run: 'nix build -L .#defaultPackage.${{ matrix.system }} --extra-platforms "${{ matrix.system }}"'
 
     - name: Archive result
       uses: actions/upload-artifact@v3
