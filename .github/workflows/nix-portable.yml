@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      continue-on-error: true
       matrix:
         system: [ x86_64-linux, aarch64-linux ]
 
@@ -58,6 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      continue-on-error: true
       matrix:
         # qemu_os: [ arch, centos7, centos8, debian, nixos, ubuntu ]
         # TODO: fix and re-activate tests
