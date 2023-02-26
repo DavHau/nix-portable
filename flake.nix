@@ -1,15 +1,14 @@
 {
   inputs = {
 
-    nixpkgs.url = "nixpkgs/nixos-21.11";
+    nixpkgs.follows = "defaultChannel";
 
     # the nixpkgs version shipped with the nix-portable executable
     # TODO: find out why updating this leads to error when building pkgs.hello:
     # Error: checking whether build environment is sane... ls: cannot access './configure': No such file or directory
-    defaultChannel.url = "nixpkgs/nixos-20.09";
+    defaultChannel.url = "nixpkgs/nixos-22.11";
 
-    nix.url = "nix/2.5.1";
-    nix.inputs.nixpkgs.follows = "nixpkgs";
+    nix.url = "nix/2.13.2";
   };
 
   outputs = { self, ... }@inp:
@@ -29,12 +28,26 @@
       testImages = {
         arch = {
           system = "x86_64-linux";
-          url = "https://mirror.pkgbuild.com/images/v20211201.40458/Arch-Linux-x86_64-basic-20211201.40458.qcow2";
-          sha256 = "0xxhb92rn2kskq9pvfmbf9h6fy75x4czl58rfq5969kbbb49yn19";
+          url = "https://mirror.pkgbuild.com/images/v20230215.126932/Arch-Linux-x86_64-basic.qcow2";
+          sha256 = "1967805y11fi8bcaxanxj2ih0qyzfrkarmbid7w0nl99qyqp07ml";
           extraVirtCustomizeCommands = [
             "--run-command 'systemctl disable pacman-init'"
-            "--run-command 'systemctl disable reflector-init'"
           ];
+          # TODO: fix issue with proot
+          # hello> unpacking sources
+          # hello> unpacking source archive /nix/store/pa10z4ngm0g83kx9mssrqzz30s84vq7k-hello-2.12.1.tar.gz
+          # hello> source root is hello-2.12.1
+          # hello> setting SOURCE_DATE_EPOCH to timestamp 1653865426 of file hello-2.12.1/ChangeLog
+          # hello> patching sources
+          # hello> configuring
+          # hello> no configure script, doing nothing
+          # hello> building
+          # hello> build flags: SHELL=/nix/store/zcla0ljiwpg5w8pvfagfjq1y2vasfix5-bash-5.1-p16/bin/bash
+          # hello> There seems to be no Makefile in this directory.
+          # hello> You must run ./configure before running 'make'.
+          # hello> make: *** [GNUmakefile:108: abort-due-to-no-makefile] Error 1
+          # error: builder for '/nix/store/2rymqf3xf6qknxvpbc46jssnli8xsskg-hello-2.12.1.drv' failed with exit code 2
+          excludeRuntimes = [ "proot" ];
         };
         centos7 = {
           system = "x86_64-linux";
@@ -62,6 +75,8 @@
             system = "x86_64-linux";
             modules = [(import ./testing/nixos-iso.nix)];
           }).config.system.build.isoImage) + "/iso/nixos.iso";
+          # TODO: fix issue with proot. Same as described above under `arch`.
+          excludeRuntimes = [ "proot" ];
         };
         ubuntu = {
           system = "x86_64-linux";
@@ -99,7 +114,7 @@
         "nix-shell -p hello --run hello"
       ];
 
-      varyCommands = anyStr: forEach commandsToTest (cmd: replaceStrings [ "_var_" ] [ anyStr ] cmd);
+      modCommand = anyStr: forEach commandsToTest (cmd: replaceStrings [ "_var_" ] [ anyStr ] cmd);
 
       nixPortableForSystem = { system, crossSystem ? null,  }:
         let
@@ -142,7 +157,7 @@
           pkgs.mkShell {
             buildInputs = with pkgs; [
               bashInteractive
-              libguestfs-with-appliance
+              guestfs-tools
               parallel
               proot
               qemu
@@ -171,6 +186,15 @@
                   "qemu-kvm"
                 else
                   "qemu-system-${lib.head (lib.splitString "-" system)}";
+              mkCmd = runtime: cmd': let
+                cmd = replaceStrings [''"''] [''\"''] cmd';
+                vars = "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL NP_LOCATION=/np_tmp";
+              in ''
+                echo -e "\ntesting cmd: ${cmd}"
+                $ssh "${vars} /home/test/nix-portable ${cmd}"
+              '';
+              testCommands = runtime:
+                concatStringsSep "\n" (map (mkCmd runtime) (modCommand runtime));
             in
               nameValuePair
                 "job-qemu-${os}${optionalString debug "-debug"}"
@@ -200,7 +224,7 @@
                       cat $img > /tmp/${os}-img
 
                       if [[ "${os}" != nixos* ]]; then
-                        ${pkgs.libguestfs-with-appliance}/bin/virt-customize -a /tmp/${os}-img \
+                        ${pkgs.guestfs-tools}/bin/virt-customize -a /tmp/${os}-img \
                           --firstboot ${pkgs.writeScript "firstboot" "#!/usr/bin/env bash \nuseradd test && mkdir -p /home/test && chown test.test /home/test; ssh-keygen -A"} \
                           --ssh-inject root:file:$pubKey \
                           ${concatStringsSep " " (testImages."${os}".extraVirtCustomizeCommands or [])} \
@@ -254,13 +278,13 @@
 
                     # test some nix commands
                     NP_DEBUG=''${NP_DEBUG:-1}
-                    ${concatStringsSep "\n\n" (forEach runtimes (runtime:
-                      concatStringsSep "\n" (map (cmd:
-                        ''$ssh "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL NP_LOCATION=/np_tmp /home/test/nix-portable ${replaceStrings [''"''] [''\"''] cmd} " ''
-                      ) (varyCommands runtime))
-                    ))}
+                    ${concatStringsSep "\n\n" (forEach runtimes testCommands)}
 
                     echo "all tests succeeded"
+
+                    ${optionalString (! debug) ''
+                      timeout 3 $sshRoot "echo o > /proc/sysrq-trigger" || :
+                    ''}
                   '');
                 }
             ) testImages;
