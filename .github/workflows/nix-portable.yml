@@ -45,7 +45,7 @@ jobs:
     - run: 'nix build -L .#defaultPackage.${{ matrix.system }}'
 
     - name: Archive result
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: nix-portable-${{ matrix.system }}
         path: result/bin/nix-portable
