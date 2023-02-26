@@ -113,7 +113,8 @@ let
     # user specified location for program files and nix store
     [ -z "\$NP_LOCATION" ] && NP_LOCATION="\$HOME"
     dir="\$NP_LOCATION/.nix-portable"
-    mkdir -p \$dir/bin
+    # create /nix/var/nix to prevent nix from falling back to chroot store.
+    mkdir -p \$dir/{bin,var/nix/var}
     # santize the tmpbin directory
     rm -rf "\$dir/tmpbin"
     # create a directory to hold executable symlinks for overriding
@@ -321,7 +322,7 @@ let
         NP_RUNTIME=proot
       fi
     else
-      debug "runtime selected via NP_RUNTIME : \$NP_RUNTIME"
+      debug "runtime selected via NP_RUNTIME: \$NP_RUNTIME"
     fi
     if [ "\$NP_RUNTIME" == "bwrap" ]; then
       collectBinds
@@ -339,7 +340,7 @@ let
       run="\$NP_PROOT \$PROOT_ARGS\\
         -r \$dir/emptyroot\\
         -b /dev:/dev\\
-        -b \$dir/store:/nix/store\\
+        -b \$dir:/nix\\
         \$binds"
         # -b \$dir/busybox/bin/busybox:/bin/sh\\
     fi
