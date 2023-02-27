@@ -2,7 +2,7 @@
 <img width="400" src="https://gist.githubusercontent.com/DavHau/755fed3774e89c0b9b8953a0a25309fa/raw/fdb8b96eeb94d3b8a79481fa6fad53281e10b15d/nix_portable_2021-04-28_bw.png">
 </p>
 
-Nix as a single binary which doesn't require configuration, privileges, or (user) namespaces.
+Nix as a static executable requiring no configuration, privileges, or (user) namespaces.
 
 For binary downloads check the [releases](https://github.com/DavHau/nix-portable/releases) page.
 
@@ -13,22 +13,24 @@ For binary downloads check the [releases](https://github.com/DavHau/nix-portable
   - make it easy to distribute nix (via other package managers)
 
 ### Tested on the following systems/environments:
-  * Distros:
+  * Distros (x86_64):
     - Arch Linux
-    - Debian 10
     - CentOS 7
-    - CentOS 8
+    - Debian
+    - Fedora
     - NixOS
-    - Ubuntu 20.04
+    - Ubuntu
+  * Distros (aarch64):
+    - Debian
   * Other Environments:
     - Docker (debian image)
-    - Github Action
+    - Github Actions
 
 ### Under the hood:
-  - The nix-portable binary is a self extracting archive, caching its contents in $HOME/.nix-portable
+  - The nix-portable executable is a self extracting archive, caching its contents in $HOME/.nix-portable
   - Either bubblewrap or proot is used to simulate the /nix/store directory which actually resides in $HOME/.nix-portable/store
   - A default nixpkgs channel is included and the NIX_PATH variable is set accordingly.
-  - Nix version 2.4 is used and configured to enable `flakes` and `nix-command` out of the box.
+  - Features `flakes` and `nix-command` are enabled out of the box.
 
 
 ### Drawbacks / Considerations:
@@ -41,7 +43,6 @@ In that situation, it might be beneficial to use a remote builder or alternative
   - managing nix profiles via `nix-env`
   - managing nix channels via `nix-channel`
   - support MacOS
-  - support other architecutres besides x86_64
 
 
 ### Executing nix-portable
