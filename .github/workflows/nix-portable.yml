@@ -19,7 +19,7 @@ jobs:
 
     steps:
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
@@ -67,7 +67,7 @@ jobs:
         qemu_os: [ arch, centos7, debian, fedora, nixos, ubuntu, debian-aarch64 ]
     steps:
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
@@ -99,7 +99,7 @@ jobs:
   #       qemu_os: [ arch, centos7, debian, fedora, nixos, ubuntu, debian-aarch64 ]
   #   steps:
 
-  #   - uses: actions/checkout@v3
+  #   - uses: actions/checkout@v4
   #     with:
   #         # Nix Flakes doesn't work on shallow clones
   #         fetch-depth: 0
@@ -125,7 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
@@ -150,7 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
