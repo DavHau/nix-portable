@@ -75,7 +75,10 @@
           # use iso image for nixos because building a qcow2 would require KVM
           img = (toString (nixosSystem {
             system = "x86_64-linux";
-            modules = [(import ./testing/nixos-iso.nix)];
+            modules = [
+              (import ./testing/nixos-iso.nix)
+              {boot.loader.timeout = lib.mkOverride 49 1;}
+            ];
           }).config.system.build.isoImage) + "/iso/nixos.iso";
           # TODO: fix issue with proot. Same as described above under `arch`.
           excludeRuntimes = [ "proot" ];
@@ -95,7 +98,10 @@
           # use iso image for nixos because building a qcow2 would require KVM
           img = (toString (nixosSystem {
             system = "aarch64-linux";
-            modules = [(import ./testing/nixos-iso.nix)];
+            modules = [
+              (import ./testing/nixos-iso.nix)
+              {boot.loader.timeout = lib.mkOverride 49 1;}
+            ];
           }).config.system.build.isoImage) + "/iso/nixos.iso";
           excludeRuntimes = [ "proot" ];
         };
