@@ -90,6 +90,7 @@
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
           ];
+          excludeRuntimes = [ "proot" ];
         };
 
         # aarch64 tests
