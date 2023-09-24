@@ -28,8 +28,8 @@
       testImages = {
         arch = {
           system = "x86_64-linux";
-          url = "https://mirror.pkgbuild.com/images/v20230215.126932/Arch-Linux-x86_64-basic.qcow2";
-          sha256 = "1967805y11fi8bcaxanxj2ih0qyzfrkarmbid7w0nl99qyqp07ml";
+          url = "https://mirror.pkgbuild.com/images/v20230915.178838/Arch-Linux-x86_64-basic.qcow2";
+          sha256 = "1aw0vxmv8mzsw8mb8sdchjci5bbchhpfhcld63gfv9lgw6pwh3vi";
           extraVirtCustomizeCommands = [
             "--run-command 'systemctl disable pacman-init'"
           ];
