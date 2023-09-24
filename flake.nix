@@ -28,7 +28,7 @@
       testImages = {
         arch = {
           system = "x86_64-linux";
-          url = "https://mirror.pkgbuild.com/images/v20230915.178838/Arch-Linux-x86_64-basic.qcow2";
+          url = "https://web.archive.org/web/20230924202157/https://mirror.pkgbuild.com/images/v20230915.178838/Arch-Linux-x86_64-basic.qcow2";
           sha256 = "1aw0vxmv8mzsw8mb8sdchjci5bbchhpfhcld63gfv9lgw6pwh3vi";
           extraVirtCustomizeCommands = [
             "--run-command 'systemctl disable pacman-init'"
@@ -82,8 +82,8 @@
         };
         ubuntu = {
           system = "x86_64-linux";
-          url = "https://cloud-images.ubuntu.com/releases/focal/release-20220118/ubuntu-20.04-server-cloudimg-amd64.img";
-          sha256 = "05p2qbmp6sbykm1iszb2zvbwbnydqg6pdrplj9z56v3cr964s9p1";
+          url = "https://cloud-images.ubuntu.com/jammy/20230914/jammy-server-cloudimg-amd64.img";
+          sha256 = "1lvhgla02g6f4ahzsczaq35ci76b54i4x5xmgywiramrqci19hxk";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
           ];
@@ -97,6 +97,7 @@
             system = "aarch64-linux";
             modules = [(import ./testing/nixos-iso.nix)];
           }).config.system.build.isoImage) + "/iso/nixos.iso";
+          excludeRuntimes = [ "proot" ];
         };
         debian-aarch64 = {
           system = "aarch64-linux";
