@@ -6,9 +6,9 @@
     # the nixpkgs version shipped with the nix-portable executable
     # TODO: find out why updating this leads to error when building pkgs.hello:
     # Error: checking whether build environment is sane... ls: cannot access './configure': No such file or directory
-    defaultChannel.url = "nixpkgs/nixos-22.11";
+    defaultChannel.url = "nixpkgs/nixos-23.05";
 
-    nix.url = "nix/2.13.2";
+    nix.url = "nix/2.18.0";
   };
 
   outputs = { self, ... }@inp:
