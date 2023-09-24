@@ -23,7 +23,6 @@ For binary downloads check the [releases](https://github.com/DavHau/nix-portable
   * Distros (aarch64):
     - Debian
   * Other Environments:
-    - Docker (debian image)
     - Github Actions
 
 ### Under the hood:
