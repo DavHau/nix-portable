@@ -89,6 +89,9 @@
           sha256 = "1lvhgla02g6f4ahzsczaq35ci76b54i4x5xmgywiramrqci19hxk";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
+            "--upload ${./testing}/id_ed25519:/etc/ssh/ssh_host_ed25519_key"
+            "--upload ${./testing}/id_ed25519.pub:/etc/ssh/ssh_host_ed25519_key.pub"
+            "--run-command 'chmod 400 /etc/ssh/ssh_host_ed25519_key'"
           ];
           excludeRuntimes = [ "proot" ];
         };
@@ -216,10 +219,12 @@
                     #!/usr/bin/env bash
                     set -e
 
+                    export TMPDIR=$(${pkgs.coreutils}/bin/mktemp -d)
+                    trap "${pkgs.coreutils}/bin/chmod -R +w '$TMPDIR'; ${pkgs.coreutils}/bin/rm -rf '$TMPDIR'" EXIT
+
                     if [ -n "$RAND_PORT" ]; then
                       # derive ssh port number from os name, to gain ability to run these jobs in parallel without collision
-                      osHash=$((0x"$(echo ${os} | sha256sum | cut -d " " -f 1)")) && [ "$r" -lt 0 ] && ((r *= -1))
-                      port=$(( ($osHash % 55535) + 10000 ))
+                      port=$(( 1024 + (0x$(echo -n "your-string" | sha256sum | cut -c 1-8) % (65535 - 1024 + 1)) ))
                     else
                       port=10022
                     fi
@@ -231,6 +236,9 @@
                     ssh="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no test@localhost"
                     sshRoot="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no root@localhost"
                     scp="${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no"
+
+                    cp "$privKey" $TMPDIR/privKey
+                    chmod 400 $TMPDIR/privKey
 
                     setup_and_start_vm() {
                       cat $img > /tmp/${os}-img
