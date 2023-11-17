@@ -112,6 +112,7 @@ let
 
     # user specified location for program files and nix store
     [ -z "\$NP_LOCATION" ] && NP_LOCATION="\$HOME"
+    NP_LOCATION="\$(readlink -f "\$NP_LOCATION")"
     dir="\$NP_LOCATION/.nix-portable"
     # create /nix/var/nix to prevent nix from falling back to chroot store.
     mkdir -p \$dir/{bin,var/nix/var}
