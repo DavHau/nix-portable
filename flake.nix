@@ -85,8 +85,8 @@
         };
         ubuntu = {
           system = "x86_64-linux";
-          url = "https://cloud-images.ubuntu.com/jammy/20230914/jammy-server-cloudimg-amd64.img";
-          sha256 = "1lvhgla02g6f4ahzsczaq35ci76b54i4x5xmgywiramrqci19hxk";
+          url = "https://cloud-images.ubuntu.com/noble/20231031/noble-server-cloudimg-amd64.img";
+          sha256 = "0vh3fk6w1zi8grqlark2ddqlsr8bx3ixj2cbgl8kwiciv4zz07w2";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
             "--upload ${./testing}/id_ed25519:/etc/ssh/ssh_host_ed25519_key"
