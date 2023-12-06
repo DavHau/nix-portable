@@ -85,7 +85,7 @@
         };
         ubuntu = {
           system = "x86_64-linux";
-          url = "https://cloud-images.ubuntu.com/noble/20231031/noble-server-cloudimg-amd64.img";
+          url = "https://web.archive.org/web/20231205213242/https://cloud-images.ubuntu.com/noble/20231031/noble-server-cloudimg-amd64.img";
           sha256 = "0vh3fk6w1zi8grqlark2ddqlsr8bx3ixj2cbgl8kwiciv4zz07w2";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
