@@ -83,6 +83,15 @@ jobs:
         name: nix-portable
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+      with:
+        image: tonistiigi/binfmt@sha256:8de6f2decb92e9001d094534bf8a92880c175bd5dfb4a9d8579f26f09821cfa2
+        platforms: all
+
+    - name: Install binfmt support
+      run: sudo apt-get install -y
+
     - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}'
 
 
