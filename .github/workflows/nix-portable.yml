@@ -30,7 +30,7 @@ jobs:
           experimental-features = nix-command flakes
           extra-platforms = ${{ matrix.system }}
 
-    - uses: cachix/cachix-action@v12
+    - uses: cachix/cachix-action@v14
       with:
         name: nix-portable
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -78,7 +78,7 @@ jobs:
           experimental-features = nix-command flakes
           extra-platforms = ${{ matrix.system }}
 
-    - uses: cachix/cachix-action@v12
+    - uses: cachix/cachix-action@v14
       with:
         name: nix-portable
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -119,7 +119,7 @@ jobs:
   #         experimental-features = nix-command flakes
   #         extra-platforms = ${{ matrix.system }}
 
-  #   - uses: cachix/cachix-action@v12
+  #   - uses: cachix/cachix-action@v14
   #     with:
   #       name: nix-portable
   #       authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -144,7 +144,7 @@ jobs:
   #       extra_nix_config: |
   #         experimental-features = nix-command flakes
 
-  #   - uses: cachix/cachix-action@v12
+  #   - uses: cachix/cachix-action@v14
   #     with:
   #       name: nix-portable
   #       authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -169,7 +169,7 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
 
-    - uses: cachix/cachix-action@v12
+    - uses: cachix/cachix-action@v14
       with:
         name: nix-portable
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
