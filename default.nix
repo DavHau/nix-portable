@@ -16,6 +16,8 @@ with builtins;
   pkgs ? import <nixpkgs> {},
   xz ? pkgs.pkgsStatic.xz,
   zstd ? pkgs.pkgsStatic.zstd,
+  nixRev ? "master",
+  nixStatic ? pkgs.pkgsStatic.nix,
 
   buildSystem ? builtins.currentSystem,
   ...
@@ -68,6 +70,7 @@ let
   caBundleZstd = pkgs.runCommand "cacerts" {} "cat ${cacert}/etc/ssl/certs/ca-bundle.crt | ${inp.zstd}/bin/zstd -19 > $out";
 
   bwrap = packStaticBin "${inp.bwrap}/bin/bwrap";
+  nixStatic = packStaticBin "${inp.nixStatic}/bin/nix";
   proot = packStaticBin "${inp.proot}/bin/proot";
   zstd = packStaticBin "${inp.zstd}/bin/zstd";
 
@@ -81,6 +84,13 @@ let
   # Variables/expressions escaped via `\$` will be evaluated at run time
   runtimeScript = ''
     #!/usr/bin/env bash
+
+    set -eo pipefail
+
+    # dump environment on exit if debug is enabled
+    if [ -n "\$NP_DEBUG" ] && [ "\$NP_DEBUG" -ge 1 ]; then
+      trap "declare -p > /tmp/np_env" EXIT
+    fi
 
     # there seem to be less issues with proot when disabling seccomp
     export PROOT_NO_SECCOMP=\''${PROOT_NO_SECCOMP:-1}
@@ -114,8 +124,9 @@ let
     [ -z "\$NP_LOCATION" ] && NP_LOCATION="\$HOME"
     NP_LOCATION="\$(readlink -f "\$NP_LOCATION")"
     dir="\$NP_LOCATION/.nix-portable"
+    store="\$dir/nix/store"
     # create /nix/var/nix to prevent nix from falling back to chroot store.
-    mkdir -p \$dir/{bin,var/nix/var}
+    mkdir -p \$dir/{bin,nix/var/nix,nix/store}
     # santize the tmpbin directory
     rm -rf "\$dir/tmpbin"
     # create a directory to hold executable symlinks for overriding
@@ -132,20 +143,24 @@ let
     # Nix portable ships its own nix.conf
     export NIX_CONF_DIR=\$dir/conf/
 
+    NP_CONF_SANDBOX=\''${NP_CONF_SANDBOX:-false}
+    NP_CONF_STORE=\''${NP_CONF_STORE:-auto}
 
-    create_nix_conf(){
-      sandbox=\$1
 
-      mkdir -p \$dir/conf/
-      rm -f \$dir/conf/nix.conf
+    recreate_nix_conf(){
+      mkdir -p "\$NIX_CONF_DIR"
+      rm -f "\$NIX_CONF_DIR/nix.conf"
 
-      echo "build-users-group = " > \$dir/conf/nix.conf
+      # static config
+      echo "build-users-group = " >> \$dir/conf/nix.conf
       echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
       echo "ignored-acls = security.selinux system.nfs4_acl" >> \$dir/conf/nix.conf
       echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
       echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
 
-      echo "sandbox = \$sandbox" >> \$dir/conf/nix.conf
+      # configurable config
+      echo "sandbox = \$NP_CONF_SANDBOX" >> \$dir/conf/nix.conf
+      echo "store = \$NP_CONF_STORE" >> \$dir/conf/nix.conf
     }
 
 
@@ -182,12 +197,12 @@ let
       ${installBin zstd "zstd"}
       ${installBin proot "proot"}
       ${installBin bwrap "bwrap"}
+      ${installBin nixStatic "nix"}
 
       # install ssl cert bundle
       unzip -poj "\$self" ${ lib.removePrefix "/" "${caBundleZstd}"} | \$dir/bin/zstd -d > \$dir/ca-bundle.crt
 
-      create_nix_conf false
-
+      recreate_nix_conf
     fi
 
 
@@ -310,12 +325,25 @@ let
     [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$(PATH="\$PATH_OLD:\$PATH" which bwrap 2>/dev/null) || true
     [ -z "\$NP_BWRAP" ] && NP_BWRAP=\$dir/bin/bwrap
     debug "bwrap executable: \$NP_BWRAP"
+    # [ -z "\$NP_NIX ] && NP_NIX=\$(PATH="\$PATH_OLD:\$PATH" which nix 2>/dev/null) || true
+    [ -z "\$NP_NIX" ] && NP_NIX=\$dir/bin/nix
+    debug "nix executable: \$NP_NIX"
     [ -z "\$NP_PROOT" ] && NP_PROOT=\$(PATH="\$PATH_OLD:\$PATH" which proot 2>/dev/null) || true
     [ -z "\$NP_PROOT" ] && NP_PROOT=\$dir/bin/proot
     debug "proot executable: \$NP_PROOT"
+    debug "testing all available runtimes..."
     if [ -z "\$NP_RUNTIME" ]; then
+      # check if nix --store works
+      mkdir -p \$dir/tmp/
+      touch \$dir/tmp/testfile
+      debug "testing nix --store"
+      if "\$NP_NIX" store add-file --store $dir/tmp/__store \$dir/tmp/testfile >/dev/null 2>&3; then
+        chmod -R +w $dir/tmp/__store
+        rm -r $dir/tmp/__store
+        debug "nix --store works on this system -> will use nix as runtime"
+        NP_RUNTIME=nix
       # check if bwrap works properly
-      if \$NP_BWRAP --bind \$dir/emptyroot / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
+      elif \$NP_BWRAP --bind \$dir/emptyroot / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -325,13 +353,18 @@ let
     else
       debug "runtime selected via NP_RUNTIME: \$NP_RUNTIME"
     fi
-    if [ "\$NP_RUNTIME" == "bwrap" ]; then
+    debug "NP_RUNTIME: \$NP_RUNTIME"
+    if [ "\$NP_RUNTIME" == "nix" ]; then
+      run="\$NP_NIX shell nix/${nixRev}#nix -c"
+      NP_CONF_STORE="\$dir"
+      recreate_nix_conf
+    elif [ "\$NP_RUNTIME" == "bwrap" ]; then
       collectBinds
       makeBindArgs --bind " " \$toBind \$sslBind
       run="\$NP_BWRAP \$BWRAP_ARGS \\
         --bind \$dir/emptyroot /\\
         --dev-bind /dev /dev\\
-        --bind \$dir/ /nix\\
+        --bind \$dir/nix /nix\\
         \$binds"
         # --bind \$dir/busybox/bin/busybox /bin/sh\\
     else
@@ -341,7 +374,7 @@ let
       run="\$NP_PROOT \$PROOT_ARGS\\
         -r \$dir/emptyroot\\
         -b /dev:/dev\\
-        -b \$dir:/nix\\
+        -b \$dir/nix:/nix\\
         \$binds"
         # -b \$dir/busybox/bin/busybox:/bin/sh\\
     fi
@@ -361,36 +394,37 @@ let
     # xz must be in PATH
     index="$(cat ${storeTar}/index)"
 
-    export missing=\$(
-      for path in \$index; do
-        if [ ! -e \$dir/store/\$(basename \$path) ]; then
-          echo "nix/store/\$(basename \$path)"
-        fi
-      done
-    )
-
-    if [ -n "\$missing" ]; then
-      debug "extracting missing store paths"
-      (
-        mkdir -p \$dir/tmp \$dir/store/
-        rm -rf \$dir/tmp/*
-        cd \$dir/tmp
-        unzip -qqp "\$self" ${ lib.removePrefix "/" "${storeTar}/tar"} \
-          | \$dir/bin/zstd -d \
-          | tar -x \$missing --strip-components 2
-        mv \$dir/tmp/* \$dir/store/
+    # if [ ! "\$NP_RUNTIME" == "nix" ]; then
+      export missing=\$(
+        for path in \$index; do
+          if [ ! -e \$store/\$(basename \$path) ]; then
+            echo "nix/store/\$(basename \$path)"
+          fi
+        done
       )
-      rm -rf \$dir/tmp
-    fi
 
-    if [ -n "\$missing" ]; then
-      debug "registering new store paths to DB"
-      reg="$(cat ${storeTar}/closureInfo/registration)"
-      cmd="\$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
-      debug "running command: \$cmd"
-      echo "\$reg" | \$cmd
-    fi
+      if [ -n "\$missing" ]; then
+        debug "extracting missing store paths"
+        (
+          mkdir -p \$dir/tmp \$store/
+          rm -rf \$dir/tmp/*
+          cd \$dir/tmp
+          unzip -qqp "\$self" ${ lib.removePrefix "/" "${storeTar}/tar"} \
+            | \$dir/bin/zstd -d \
+            | tar -x \$missing --strip-components 2
+          mv \$dir/tmp/* \$store/
+        )
+        rm -rf \$dir/tmp
+      fi
 
+      if [ -n "\$missing" ]; then
+        debug "registering new store paths to DB"
+        reg="$(cat ${storeTar}/closureInfo/registration)"
+        cmd="\$run \$store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
+        debug "running command: \$cmd"
+        # echo "\$reg" | \$cmd
+      fi
+    # fi
 
 
     ### select executable
@@ -405,37 +439,47 @@ let
         bin="\$(which \$2)"
         shift; shift
       else
-        bin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/\$1"
+        bin="\$store${lib.removePrefix "/nix/store" nix}/bin/\$1"
         shift
       fi
     else
-      bin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/\$(basename \$0)"
+      bin="\$store${lib.removePrefix "/nix/store" nix}/bin/\$(basename \$0)"
     fi
 
 
 
     ### check which runtime has been used previously
-    lastRuntime=\$(cat "\$dir/conf/last_runtime" 2>&3) || true
+    if [ -f "\$dir/conf/last_runtime" ]; then
+      lastRuntime=\$(cat "\$dir/conf/last_runtime")
+    else
+      lastRuntime=
+    fi
 
 
 
-    ### check if nix is funtional with or without sandbox
+    ### check if nix is functional with or without sandbox
     # sandbox-fallback is not reliable: https://github.com/NixOS/nix/issues/4719
     if [ "\$newNPVersion" == "true" ] || [ "\$lastRuntime" != "\$NP_RUNTIME" ]; then
-      nixBin="\$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix-build"
+      nixBin="\$store${lib.removePrefix "/nix/store" nix}/bin/nix"
+      # if [ "\$NP_RUNTIME" == "nix" ]; then
+      #   nixBin="nix"
+      # else
+      # fi
       debug "Testing if nix can build stuff without sandbox"
-      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false >&3 2>&3; then
+      if ! \$run "\$nixBin" build --no-link --impure --expr "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false >&3 2>&3; then
         echo "Fatal error: nix is unable to build packages"
         exit 1
       fi
 
-      debug "Testing if nix sandox is functional"
-      if ! \$run "\$nixBin" -E "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true >&3 2>&3; then
+      debug "Testing if nix sandbox is functional"
+      if ! \$run "\$nixBin" build --no-link --impure --expr "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true >&3 2>&3; then
         debug "Sandbox doesn't work -> disabling sandbox"
-        create_nix_conf false
+        NP_CONF_SANDBOX=false
+        recreate_nix_conf
       else
         debug "Sandboxed builds work -> enabling sandbox"
-        create_nix_conf true
+        NP_CONF_SANDBOX=true
+        recreate_nix_conf
       fi
 
     fi
@@ -460,9 +504,9 @@ let
 
 
     ### install git via nix, if git installation is not in /nix path
-    if \$doInstallGit && [ ! -e \$dir/store${lib.removePrefix "/nix/store" git.out} ] ; then
+    if \$doInstallGit && [ ! -e \$store${lib.removePrefix "/nix/store" git.out} ] ; then
       echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'"
-      \$run \$dir/store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
+      \$run \$store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
         (import ${nixpkgsSrc} {}).${gitAttribute}.out
       "
     else
@@ -487,6 +531,7 @@ let
       debug "running command: \$cmd"
       exec \$NP_RUN \$bin "\$@"
     fi
+    exit
   '';
 
   runtimeScriptEscaped = replaceStrings ["\""] ["\\\""] runtimeScript;
@@ -511,8 +556,9 @@ let
     unzip -vl $out/bin/nix-portable.zip
 
     zip="${zip}/bin/zip -0"
-    $zip $out/bin/nix-portable.zip ${proot}/bin/proot
     $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
+    $zip $out/bin/nix-portable.zip ${nixStatic}/bin/nix
+    $zip $out/bin/nix-portable.zip ${proot}/bin/proot
     $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
     $zip $out/bin/nix-portable.zip ${storeTar}/tar
     $zip $out/bin/nix-portable.zip ${caBundleZstd}
