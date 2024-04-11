@@ -9,8 +9,8 @@ For binary downloads check the [releases](https://github.com/DavHau/nix-portable
 ### Goals:
   - make it extremely simple to install nix
   - make nix work in restricted environments (containers, HPC, ...)
-  - be able to use the official binary cache (by simulating the /nix/store)
-  - make it easy to distribute nix (via other package managers)
+  - be able to use the official binary cache (by virtualizing the /nix/store)
+  - make it easy to distribute nix as a dependency of other projects
 
 ### Tested on the following systems/environments:
   * Distros (x86_64):
@@ -27,14 +27,14 @@ For binary downloads check the [releases](https://github.com/DavHau/nix-portable
 
 ### Under the hood:
   - The nix-portable executable is a self extracting archive, caching its contents in $HOME/.nix-portable
-  - Either bubblewrap or proot is used to simulate the /nix/store directory which actually resides in $HOME/.nix-portable/store
+  - Either nix, bubblewrap or proot is used to virtualize the /nix/store directory which actually resides in $HOME/.nix-portable/store
   - A default nixpkgs channel is included and the NIX_PATH variable is set accordingly.
   - Features `flakes` and `nix-command` are enabled out of the box.
 
 
 ### Drawbacks / Considerations:
-If user namespaces are not available on a system, nix-portable will fall back to using proot instead of bubblewrap.
-Proot's virtualization can have a significant performance overhead depending on the workload.
+If user namespaces are not available on a system, nix-portable will fall back to using proot as an alternative mechanism to virtualize /nix.
+Proot can introduce significant performance overhead depending on the workload.
 In that situation, it might be beneficial to use a remote builder or alternatively build the derivations on another host and sync them via a cache like cachix.org.
 
 
@@ -71,25 +71,27 @@ To enter the wrapped environment just use nix-shell:
 ```
 
 ### Container Runtimes
-To simulate the /nix/store and a few other directories, nix-portable supports the following container runtimes.
+To simulate the /nix/store, nix-portable supports the following runtimes, preferred in this order:
+  - nix (shipped via nix-portable)
   - bwrap (existing installation)
   - bwrap (shipped via nix-portable)
   - proot (existing installation)
   - proot (shipped via nix-portable)
 
-bwrap is preferred over proot and existing installations are preferred over the nix-portable included binaries.
-nix-portable will try to figure out which runtime is best for your system.
-In case the automatically selected runtime doesn't work, use the follwing environment variables to specify the runtime, but please also open an issue, so we can improve the automatic selection.
+nix-portable will auto select the best runtime for your system.
+In case the auto selected runtime doesn't work, please open an issue.
+The default runtime can be overridden via [Environment Variables](#environment-variables).
 
 ### Environment Variables
-The following environment variables are optional and can be used to override the default behaviour of nix-portable
+The following environment variables are optional and can be used to override the default behavior of nix-portable
 ```
 NP_DEBUG      (1 = debug msgs; 2 = 'set -x' for nix-portable)
 NP_GIT        specify path to the git executable
 NP_LOCATION   where to put the `.nix-portable` dir. (defaults to `$HOME`)
-NP_RUNTIME    which runtime to use (must be 'bwrap' or 'proot')
-NP_BWRAP      specify the path to the bwrap executable to use
-NP_PROOT      specify the path to the proot executable to use
+NP_RUNTIME    which runtime to use (must be one of: nix, bwrap, proot)
+NP_NIX        specify the path to the static nix executable to use in case nix is selected as runtime
+NP_BWRAP      specify the path to the bwrap executable to use in case bwrap is selected as runtime
+NP_PROOT      specify the path to the proot executable to use in case proot is selected as runtime
 NP_RUN        override the complete command to run nix
               (to use an unsupported runtime, or for debugging)
               nix will then be executed like: $NP_RUN {nix-binary} {args...}
