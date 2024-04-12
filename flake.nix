@@ -25,7 +25,7 @@
 
       # Linux distro images to test nix-portable against
       # After adding a new system, don't forget to add the name also in ./.github/workflows
-      testImages = {
+      testImages = rec {
         arch = {
           system = "x86_64-linux";
           url = "https://web.archive.org/web/20230924202157/https://mirror.pkgbuild.com/images/v20230915.178838/Arch-Linux-x86_64-basic.qcow2";
@@ -33,21 +33,6 @@
           extraVirtCustomizeCommands = [
             "--run-command 'systemctl disable pacman-init'"
           ];
-          # TODO: fix issue with proot
-          # hello> unpacking sources
-          # hello> unpacking source archive /nix/store/pa10z4ngm0g83kx9mssrqzz30s84vq7k-hello-2.12.1.tar.gz
-          # hello> source root is hello-2.12.1
-          # hello> setting SOURCE_DATE_EPOCH to timestamp 1653865426 of file hello-2.12.1/ChangeLog
-          # hello> patching sources
-          # hello> configuring
-          # hello> no configure script, doing nothing
-          # hello> building
-          # hello> build flags: SHELL=/nix/store/zcla0ljiwpg5w8pvfagfjq1y2vasfix5-bash-5.1-p16/bin/bash
-          # hello> There seems to be no Makefile in this directory.
-          # hello> You must run ./configure before running 'make'.
-          # hello> make: *** [GNUmakefile:108: abort-due-to-no-makefile] Error 1
-          # error: builder for '/nix/store/2rymqf3xf6qknxvpbc46jssnli8xsskg-hello-2.12.1.drv' failed with exit code 2
-          excludeRuntimes = [ "proot" ];
         };
         centos7 = {
           system = "x86_64-linux";
@@ -67,8 +52,6 @@
           system = "x86_64-linux";
           url = "https://download.fedoraproject.org/pub/fedora/linux/releases/37/Cloud/x86_64/images/Fedora-Cloud-Base-37-1.7.x86_64.qcow2";
           sha256 = "187k05x1a2r0rq0lbsxircvk7ckk0mifxxj5ayd4hrgf3v4vxfdm";
-          # TODO: fix issue with proot. Same as described above under `arch`.
-          excludeRuntimes = [ "proot" ];
         };
         nixos = {
           system = "x86_64-linux";
@@ -80,10 +63,8 @@
               {boot.loader.timeout = lib.mkOverride 49 1;}
             ];
           }).config.system.build.isoImage) + "/iso/nixos.iso";
-          # TODO: fix issue with proot. Same as described above under `arch`.
-          excludeRuntimes = [ "proot" ];
         };
-        ubuntu = {
+        ubuntu_22_04 = {
           system = "x86_64-linux";
           url = "https://web.archive.org/web/20231205213242/https://cloud-images.ubuntu.com/noble/20231031/noble-server-cloudimg-amd64.img";
           sha256 = "0vh3fk6w1zi8grqlark2ddqlsr8bx3ixj2cbgl8kwiciv4zz07w2";
@@ -93,7 +74,21 @@
             "--upload ${./testing}/id_ed25519.pub:/etc/ssh/ssh_host_ed25519_key.pub"
             "--run-command 'chmod 400 /etc/ssh/ssh_host_ed25519_key'"
           ];
-          excludeRuntimes = [ "proot" ];
+        };
+        ubuntu_23_10 = {
+          system = "x86_64-linux";
+          # original: https://cloud-images.ubuntu.com/mantic/20240410/mantic-server-cloudimg-amd64.img
+          url = "https://web.archive.org/web/20240412085046/https://cloud-images.ubuntu.com/mantic/20240410/mantic-server-cloudimg-amd64.img";  # 23.10
+          sha256 = "00lv3rypaxhfryds3bdl8709lav7rj44a7ifvrhrpc2i5lnh62my";
+          inherit (ubuntu_22_04) extraVirtCustomizeCommands;
+        };
+        ubuntu_24_04 = {
+          system = "x86_64-linux";
+          # original https://cloud-images.ubuntu.com/noble/20240410/noble-server-cloudimg-amd64.img"
+          url = "https://web.archive.org/web/20240412085322/https://cloud-images.ubuntu.com/noble/20240410/noble-server-cloudimg-amd64.img";  # 24.04
+          sha256 = "0gb5fsm5sb3abalp24cmygnkinhzkf7vj73pdg80j67l9zdfg2w1";
+          inherit (ubuntu_22_04) extraVirtCustomizeCommands;
+          excludeRuntimes = [ "nix" "bwrap" ];
         };
 
         # aarch64 tests
@@ -107,7 +102,6 @@
               {boot.loader.timeout = lib.mkOverride 49 1;}
             ];
           }).config.system.build.isoImage) + "/iso/nixos.iso";
-          excludeRuntimes = [ "proot" ];
         };
         debian-aarch64 = {
           system = "aarch64-linux";
@@ -136,7 +130,7 @@
 
           # the static proot built with nix somehow didn't work on other systems,
           # therefore using the proot static build from proot gitlab
-          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/github.nix { inherit pkgs; };
+          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/alpine.nix { inherit pkgs; };
         in
           # crashes if nixpkgs updated: error: executing 'git': No such file or directory
           pkgs.callPackage ./default.nix {
@@ -239,6 +233,8 @@
                     sshRoot="${pkgs.openssh}/bin/ssh -p $port -i $privKey -o StrictHostKeyChecking=no root@localhost"
                     scp="${pkgs.openssh}/bin/scp -P $port -i $privKey -o StrictHostKeyChecking=no"
 
+                    echo "ssh command: $ssh"
+
                     cp "$privKey" $TMPDIR/privKey
                     chmod 400 $TMPDIR/privKey
 
@@ -270,7 +266,7 @@
                         &
                     }
 
-                    # if debug, dont init/run VM if already running
+                    # if debug, don't init/run VM if already running
                     ${optionalString debug ''
                       ${pkgs.busybox}/bin/pgrep qemu >/dev/null || \
                     ''}
