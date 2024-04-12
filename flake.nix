@@ -66,8 +66,9 @@
         };
         ubuntu_22_04 = {
           system = "x86_64-linux";
-          url = "https://web.archive.org/web/20231205213242/https://cloud-images.ubuntu.com/noble/20231031/noble-server-cloudimg-amd64.img";
-          sha256 = "0vh3fk6w1zi8grqlark2ddqlsr8bx3ixj2cbgl8kwiciv4zz07w2";
+          # original: https://cloud-images.ubuntu.com/jammy/20240403/jammy-server-cloudimg-amd64.img
+          url = "https://web.archive.org/web/20240412120257/https://cloud-images.ubuntu.com/jammy/20240403/jammy-server-cloudimg-amd64.img";
+          sha256 = "sha256:1qvgqx9xavzpqvm7wghag79ilqchkvmcj73510xypca2yl0zpb6f";
           extraVirtCustomizeCommands = [
             "--copy-in ${./testing/ubuntu}/01-netplan.yaml:/etc/netplan/"
             "--upload ${./testing}/id_ed25519:/etc/ssh/ssh_host_ed25519_key"
