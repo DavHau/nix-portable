@@ -12,18 +12,21 @@ For binary downloads check the [releases](https://github.com/DavHau/nix-portable
   - be able to use the official binary cache (by virtualizing the /nix/store)
   - make it easy to distribute nix as a dependency of other projects
 
-### Tested on the following systems/environments:
+### Tested continuously on the following systems/environments:
   * Distros (x86_64):
     - Arch Linux
     - CentOS 7
     - Debian
     - Fedora
     - NixOS
-    - Ubuntu
+    - Ubuntu 22.04
+    - Ubuntu 23.10
+    - Ubuntu 24.04
   * Distros (aarch64):
     - Debian
   * Other Environments:
     - Github Actions
+    - Docker (debian image)
 
 ### Under the hood:
   - The nix-portable executable is a self extracting archive, caching its contents in $HOME/.nix-portable
