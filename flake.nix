@@ -143,7 +143,6 @@
             compression = "zstd -3 -T1";
 
             nix = inp.nix.packages.${system}.nix;
-            nixRev = inp.nix.rev;
             nixStatic = inp.nix.packages.${system}.nix-static;
 
             busybox = pkgs.pkgsStatic.busybox;
@@ -296,6 +295,12 @@
                       echo -e "\n\nstarting to test nix-portable"
                       # test some nix commands
                       NP_DEBUG=''${NP_DEBUG:-1}
+                      # test if automatic runtime selection works
+                      echo "testing automatic runtime selection..."
+                      if ! $ssh "NP_DEBUG=$NP_DEBUG /home/test/nix-portable nix-shell -p hello --run hello"; then
+                        echo "Error: automatic runtime selection failed"
+                        exit 1
+                      fi
                       ${concatStringsSep "\n\n" (forEach runtimes testCommands)}
                     ''}
 

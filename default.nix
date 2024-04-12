@@ -16,7 +16,6 @@ with builtins;
   pkgs ? import <nixpkgs> {},
   xz ? pkgs.pkgsStatic.xz,
   zstd ? pkgs.pkgsStatic.zstd,
-  nixRev ? "master",
   nixStatic ? pkgs.pkgsStatic.nix,
 
   buildSystem ? builtins.currentSystem,
@@ -127,10 +126,13 @@ let
     store="\$dir/nix/store"
     # create /nix/var/nix to prevent nix from falling back to chroot store.
     mkdir -p \$dir/{bin,nix/var/nix,nix/store}
-    # santize the tmpbin directory
+    # sanitize the tmpbin directory
     rm -rf "\$dir/tmpbin"
     # create a directory to hold executable symlinks for overriding
     mkdir -p "\$dir/tmpbin"
+
+    # create minimal drv file for nix to spawn a nix shell
+    echo 'builtins.derivation {name="foo"; builder="/bin/sh"; args = ["-c" "echo hello \> \\\$out"]; system=builtins.currentSystem;}' > "\$dir/mini-drv.nix"
 
     # the fingerprint being present inside a file indicates that
     # this version of nix-portable has already been initialized
@@ -337,13 +339,15 @@ let
       mkdir -p \$dir/tmp/
       touch \$dir/tmp/testfile
       debug "testing nix --store"
-      if "\$NP_NIX" store add-file --store $dir/tmp/__store \$dir/tmp/testfile >/dev/null 2>&3; then
-        chmod -R +w $dir/tmp/__store
-        rm -r $dir/tmp/__store
+      if "\$NP_NIX" --store "\$dir/tmp/__store" shell -f "\$dir/mini-drv.nix" -c "\$dir/bin/nix" store add-file --store "\$dir/tmp/__store" "\$dir/tmp/testfile" >/dev/null 2>&3; then
+        chmod -R +w \$dir/tmp/__store
+        rm -r \$dir/tmp/__store
         debug "nix --store works on this system -> will use nix as runtime"
         NP_RUNTIME=nix
       # check if bwrap works properly
-      elif \$NP_BWRAP --bind \$dir/emptyroot / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
+      elif \\
+          debug "nix --store failed -> testing bwrap" \\
+          && \$NP_BWRAP --bind \$dir/emptyroot / --bind \$dir/ /nix --bind \$dir/busybox/bin/busybox "\$dir/true" "\$dir/true" 2>&3 ; then
         debug "bwrap seems to work on this system -> will use bwrap"
         NP_RUNTIME=bwrap
       else
@@ -355,7 +359,8 @@ let
     fi
     debug "NP_RUNTIME: \$NP_RUNTIME"
     if [ "\$NP_RUNTIME" == "nix" ]; then
-      run="\$NP_NIX shell nix/${nixRev}#nix -c"
+      run="\$NP_NIX shell -f \$dir/mini-drv.nix -c"
+      export PATH="\$PATH:\$store${lib.removePrefix "/nix/store" nix}/bin"
       NP_CONF_STORE="\$dir"
       recreate_nix_conf
     elif [ "\$NP_RUNTIME" == "bwrap" ]; then
@@ -466,13 +471,13 @@ let
       # else
       # fi
       debug "Testing if nix can build stuff without sandbox"
-      if ! \$run "\$nixBin" build --no-link --impure --expr "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox false >&3 2>&3; then
+      if ! \$run "\$nixBin" build --no-link -f "\$dir/mini-drv.nix" --option sandbox false >&3 2>&3; then
         echo "Fatal error: nix is unable to build packages"
         exit 1
       fi
 
       debug "Testing if nix sandbox is functional"
-      if ! \$run "\$nixBin" build --no-link --impure --expr "(import <nixpkgs> {}).runCommand \\"test\\" {} \\"echo \$(date) > \\\$out\\"" --option sandbox true >&3 2>&3; then
+      if ! \$run "\$nixBin" build --no-link -f "\$dir/mini-drv.nix" --option sandbox true >&3 2>&3; then
         debug "Sandbox doesn't work -> disabling sandbox"
         NP_CONF_SANDBOX=false
         recreate_nix_conf
