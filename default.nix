@@ -19,10 +19,19 @@ with builtins;
   nixStatic ? pkgs.pkgsStatic.nix,
 
   buildSystem ? builtins.currentSystem,
+  # hardcode executable to run. Useful when creating a bundle.
+  bundledPackage ? null,
   ...
 }@inp:
 with lib;
 let
+
+  pname =
+    if bundledPackage == null
+    then "nix-portable"
+    else lib.getName bundledPackage;
+
+  bundledExe = lib.getExe bundledPackage;
 
   nixpkgsSrc = pkgs.path;
 
@@ -74,7 +83,7 @@ let
   zstd = packStaticBin "${inp.zstd}/bin/zstd";
 
   # the default nix store contents to extract when first used
-  storeTar = maketar ([ cacert nix nixpkgsSrc ]);
+  storeTar = maketar ([ cacert nix nixpkgsSrc ] ++ lib.optional (bundledPackage != null) bundledPackage);
 
 
   # The runtime script which unpacks the necessary files to $HOME/.nix-portable
@@ -433,9 +442,15 @@ let
 
 
     ### select executable
-    # the executable can either be selected by executing './nix-portable BIN_NAME',
-    # or by symlinking to nix-portable, in which case the name of the symlink selectes the binary
-    if [[ "\$(basename \$0)" == nix-portable* ]]; then
+    # the executable can either be selected by
+    # - executing './nix-portable BIN_NAME',
+    # - symlinking to nix-portable, in which case the name of the symlink selects the nix executable
+    # Alternatively the executable can be hardcoded by specifying the argument 'executable' of nix-portable's default.nix file.
+    executable="${if bundledPackage == null then "" else bundledExe}"
+    if [ "\$executable" != "" ]; then
+      bin="\$executable"
+      debug "executable is hardcoded to: \$bin"
+    elif [[ "\$(basename \$0)" == nix-portable* ]]; then\
       if [ -z "\$1" ]; then
         echo "Error: please specify the nix binary to execute"
         echo "Alternatively symlink against \$0"
@@ -541,7 +556,7 @@ let
 
   runtimeScriptEscaped = replaceStrings ["\""] ["\\\""] runtimeScript;
 
-  nixPortable = pkgs.runCommand "nix-portable" {nativeBuildInputs = [unixtools.xxd unzip];} ''
+  nixPortable = pkgs.runCommand pname {nativeBuildInputs = [unixtools.xxd unzip];} ''
     mkdir -p $out/bin
     echo "${runtimeScriptEscaped}" > $out/bin/nix-portable.zip
     xxd $out/bin/nix-portable.zip | tail
@@ -575,9 +590,14 @@ let
     ${zip}/bin/zip -F $out/bin/nix-portable.zip --out $out/bin/nix-portable-fixed.zip
 
     rm $out/bin/nix-portable.zip
-    mv $out/bin/nix-portable-fixed.zip $out/bin/nix-portable
-
-    chmod +x $out/bin/nix-portable
+    executable=${if bundledPackage == null then "" else bundledExe}
+    if [ "$executable" == "" ]; then
+      target="$out/bin/nix-portable"
+    else
+      target="$out/bin/$(basename "$executable")"
+    fi
+    mv $out/bin/nix-portable-fixed.zip "$target"
+    chmod +x "$target"
   '';
 in
 nixPortable.overrideAttrs (prev: {
