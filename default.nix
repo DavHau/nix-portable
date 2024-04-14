@@ -44,7 +44,7 @@ let
 
   maketar = targets:
     pkgsBuild.stdenv.mkDerivation {
-      name = "maketar";
+      name = "nix-portable-store-tarball";
       nativeBuildInputs = [ pkgsBuild.perl pkgsBuild.zstd ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
       buildCommand = ''
@@ -94,6 +94,8 @@ let
     #!/usr/bin/env bash
 
     set -eo pipefail
+
+    start=\$(date +%s%N)  # start time in nanoseconds
 
     # dump environment on exit if debug is enabled
     if [ -n "\$NP_DEBUG" ] && [ "\$NP_DEBUG" -ge 1 ]; then
@@ -344,11 +346,25 @@ let
     debug "proot executable: \$NP_PROOT"
     debug "testing all available runtimes..."
     if [ -z "\$NP_RUNTIME" ]; then
+      # read last automatic selected runtime from disk
+      if [ "\$newNPVersion" == "true" ]; then
+        debug "removing cached auto selected runtime"
+        rm -f "\$dir/conf/last_auto_runtime"
+      fi
+      if [ -f "\$dir/conf/last_auto_runtime" ]; then
+        last_auto_runtime="\$(cat "\$dir/conf/last_auto_runtime")"
+      else
+        last_auto_runtime=
+      fi
+      debug "last auto selected runtime: \$last_auto_runtime"
+      if [ "\$last_auto_runtime" != "" ]; then
+        NP_RUNTIME="\$last_auto_runtime"
       # check if nix --store works
-      mkdir -p \$dir/tmp/
-      touch \$dir/tmp/testfile
-      debug "testing nix --store"
-      if "\$NP_NIX" --store "\$dir/tmp/__store" shell -f "\$dir/mini-drv.nix" -c "\$dir/bin/nix" store add-file --store "\$dir/tmp/__store" "\$dir/tmp/testfile" >/dev/null 2>&3; then
+      elif \\
+          debug "testing nix --store" \\
+          && mkdir -p \$dir/tmp/ \\
+          && touch \$dir/tmp/testfile \\
+          && "\$NP_NIX" --store "\$dir/tmp/__store" shell -f "\$dir/mini-drv.nix" -c "\$dir/bin/nix" store add-file --store "\$dir/tmp/__store" "\$dir/tmp/testfile" >/dev/null 2>&3; then
         chmod -R +w \$dir/tmp/__store
         rm -r \$dir/tmp/__store
         debug "nix --store works on this system -> will use nix as runtime"
@@ -363,6 +379,7 @@ let
         debug "bwrap doesn't work on this system -> will use proot"
         NP_RUNTIME=proot
       fi
+      echo -n "\$NP_RUNTIME" > "\$dir/conf/last_auto_runtime"
     else
       debug "runtime selected via NP_RUNTIME: \$NP_RUNTIME"
     fi
@@ -538,6 +555,14 @@ let
     if \$doInstallGit; then
       export PATH="${git.out}/bin:\$PATH"
     fi
+
+
+    ### print elapsed time
+    end=\$(date +%s%N)  # end time in nanoseconds
+    # time elapsed in millis with two decimal places
+    # elapsed=\$(echo "scale=2; (\$end - \$start)/1000000000" | bc)
+    elapsed=\$(echo "scale=2; (\$end - \$start)/1000000" | bc)
+    debug "Time to initialize nix-portable: \$elapsed millis"
 
 
 

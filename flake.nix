@@ -162,8 +162,19 @@
       ({
 
         bundlers = forAllSystems (system: pkgs: {
-          default = drv: self.packages.${system}.nix-portable.override {
+          # bundle with fast compression by default
+          default = self.bundlers.${system}.zstd-fast;
+          zstd-fast = drv: self.packages.${system}.nix-portable.override {
             bundledPackage = drv;
+            compression = "zstd -3 -T0";
+          };
+          zstd-max = drv: self.packages.${system}.nix-portable.override {
+            bundledPackage = drv;
+            compression = "zstd -19 -T0";
+          };
+          xz-max = drv: self.packages.${system}.nix-portable.override {
+            bundledPackage = drv;
+            compression = "xz -9 -T0";
           };
         });
 
@@ -180,7 +191,18 @@
         );
 
         packages = forAllSystems (system: pkgs: {
-          nix-portable = nixPortableForSystem { inherit system; };
+          nix-portable = (nixPortableForSystem { inherit system; }).override {
+            # all non x86_64-linux systems are built via emulation
+            #   -> decrease compression level to reduce CI build time
+            compression =
+              if system == "x86_64-linux"
+              then "zstd -19 -T0"
+              else "zstd -9 -T0";
+          };
+          # dev version that builds faster
+          nix-portable-dev = self.packages.${system}.nix-portable.override {
+            compression = "zstd -3 -T1";
+          };
         });
 
         defaultPackage = forAllSystems (system: pkgs:
