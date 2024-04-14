@@ -161,6 +161,12 @@
     recursiveUpdate
       ({
 
+        bundlers = forAllSystems (system: pkgs: {
+          default = drv: self.packages.${system}.nix-portable.override {
+            bundledPackage = drv;
+          };
+        });
+
         devShell = forAllSystems (system: pkgs:
           pkgs.mkShell {
             buildInputs = with pkgs; [
