@@ -172,10 +172,6 @@
             bundledPackage = drv;
             compression = "zstd -19 -T0";
           };
-          xz-max = drv: self.packages.${system}.nix-portable.override {
-            bundledPackage = drv;
-            compression = "xz -9 -T0";
-          };
         });
 
         devShell = forAllSystems (system: pkgs:
