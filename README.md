@@ -107,6 +107,28 @@ $ ./python3 -c 'import numpy, scipy, pandas; print("Success !")'
 Success !
 ```
 
+#### Bundle whole dev environment
+
+Bundle a complex development environment including tools like compilers, linters, interpreters, etc. into a static executable.
+
+Prerequisites:
+- use [numtide/devshell](https://github.com/numtide/devshell) to define your devShell (`mkShell` from nixpkgs won't work because it is not executable)
+- expose the devShell via a flake.nix based repo on github
+
+```shellSession
+$ nix bundle --bundler github:DavHau/nix-portable -o devshell github:<user>/<repo>#devShells.<system>.default 
+$ cp ./devshell/bin/devshell ./devshell && chmod +w ./devshell
+$ ./devshell
+🔨 Welcome to devshell
+
+[[general commands]]
+[...]
+```
+
+#### Bundle compression
+
+To create smaller bundles specify `--bundler github:DavHau/nix-portable#zstd-max`.
+
 ### Supported platforms
 
 Potentially any linux system with an **x86_64** or **aarch64** CPU is supported.
