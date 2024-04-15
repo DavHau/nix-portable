@@ -422,7 +422,6 @@ let
     ### install nix store
     # Install all the nix store paths necessary for the current nix-portable version
     # We only unpack missing store paths from the tar archive.
-    # xz must be in PATH
     index="$(cat ${storeTar}/index)"
 
     # if [ ! "\$NP_RUNTIME" == "nix" ]; then
