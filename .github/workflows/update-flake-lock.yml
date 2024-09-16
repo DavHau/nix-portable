@@ -15,6 +15,6 @@ jobs:
       # `bors merge` will automerge if tests succeed
       # Requires this github to be installed: https://app.bors.tech/
       - name: Update flake.lock
-        uses: DeterminateSystems/update-flake-lock@v23
+        uses: DeterminateSystems/update-flake-lock@v24
         with:
           pr-labels: dependencies
