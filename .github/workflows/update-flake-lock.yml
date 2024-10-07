@@ -11,7 +11,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Install Nix
-        uses: cachix/install-nix-action@V27
+        uses: cachix/install-nix-action@v30
       # `bors merge` will automerge if tests succeed
       # Requires this github to be installed: https://app.bors.tech/
       - name: Update flake.lock

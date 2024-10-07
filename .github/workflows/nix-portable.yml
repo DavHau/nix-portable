@@ -24,7 +24,7 @@ jobs:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
 
-    - uses: cachix/install-nix-action@V27
+    - uses: cachix/install-nix-action@v30
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes
@@ -72,7 +72,7 @@ jobs:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
 
-    - uses: cachix/install-nix-action@V27
+    - uses: cachix/install-nix-action@v30
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes
@@ -113,7 +113,7 @@ jobs:
   #         # Nix Flakes doesn't work on shallow clones
   #         fetch-depth: 0
 
-  #   - uses: cachix/install-nix-action@V27
+  #   - uses: cachix/install-nix-action@v30
   #     with:
   #       extra_nix_config: |
   #         experimental-features = nix-command flakes
@@ -139,7 +139,7 @@ jobs:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
 
-    - uses: cachix/install-nix-action@V27
+    - uses: cachix/install-nix-action@v30
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes
@@ -164,7 +164,7 @@ jobs:
           # Nix Flakes doesn't work on shallow clones
           fetch-depth: 0
 
-    - uses: cachix/install-nix-action@V27
+    - uses: cachix/install-nix-action@v30
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes
