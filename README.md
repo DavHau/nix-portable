@@ -177,17 +177,17 @@ The default runtime can be overridden via [Environment Variables](#environment-v
 The following environment variables are optional and can be used to override the default behavior of nix-portable at run-time.
 
 ```txt
-NP_DEBUG      (1 = debug msgs; 2 = 'set -x' for nix-portable)
-NP_GIT        specify path to the git executable
-NP_LOCATION   where to put the `.nix-portable` dir. (defaults to `$HOME`)
-NP_RUNTIME    which runtime to use (must be one of: nix, bwrap, proot)
-NP_NIX        specify the path to the static nix executable to use in case nix is selected as runtime
-NP_BWRAP      specify the path to the bwrap executable to use in case bwrap is selected as runtime
-NP_PROOT      specify the path to the proot executable to use in case proot is selected as runtime
-NP_RUN        override the complete command to run nix
-              (to use an unsupported runtime, or for debugging)
-              nix will then be executed like: $NP_RUN {nix-binary} {args...}
-
+NP_DEBUG          (1 = debug msgs; 2 = 'set -x' for nix-portable)
+NP_GIT            specify path to the git executable
+NP_LOCATION       where to put the `.nix-portable` dir. (defaults to `$HOME`)
+NP_RUNTIME        which runtime to use (must be one of: nix, bwrap, proot)
+NP_NIX            specify the path to the static nix executable to use in case nix is selected as runtime
+NP_BWRAP          specify the path to the bwrap executable to use in case bwrap is selected as runtime
+NP_PROOT          specify the path to the proot executable to use in case proot is selected as runtime
+NP_RUN            override the complete command to run nix
+                  (to use an unsupported runtime, or for debugging)
+                  nix will then be executed like: $NP_RUN {nix-binary} {args...}
+NP_CONF_IGNORED_ACLS   a spaces separated list that gets concatenated onte the `ignored-acls| setting in `nix.conf`
 ```
 
 ### Drawbacks / Considerations

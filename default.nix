@@ -158,7 +158,7 @@ let
 
     NP_CONF_SANDBOX=\''${NP_CONF_SANDBOX:-false}
     NP_CONF_STORE=\''${NP_CONF_STORE:-auto}
-
+    NP_CONF_IGNORED_ACLS=\''${NP_CONF_IGNORED_ACLS:-}
 
     recreate_nix_conf(){
       mkdir -p "\$NIX_CONF_DIR"
@@ -167,7 +167,7 @@ let
       # static config
       echo "build-users-group = " >> \$dir/conf/nix.conf
       echo "experimental-features = nix-command flakes" >> \$dir/conf/nix.conf
-      echo "ignored-acls = security.selinux system.nfs4_acl" >> \$dir/conf/nix.conf
+      echo "ignored-acls = security.selinux system.nfs4_acl \$NP_CONF_IGNORED_ACLS" >> \$dir/conf/nix.conf
       echo "use-sqlite-wal = false" >> \$dir/conf/nix.conf
       echo "sandbox-paths = /bin/sh=\$dir/busybox/bin/busybox" >> \$dir/conf/nix.conf
 

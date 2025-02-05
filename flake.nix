@@ -223,7 +223,7 @@
               announce = cmd: ''echo -e "\ntesting cmd: ${cmd}"'';
               escape = cmd: replaceStrings [''"''] [''\"''] cmd;
               mkCmd = runtime: cmd: let
-                vars = "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL NP_LOCATION=/np_tmp";
+                vars = "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL NP_LOCATION=/np_tmp NP_CONF_IGNORED_ACLS=$NP_CONF_IGNORED_ACLS";
               in ''
                 ${announce (escape cmd)}
                 $ssh "${vars} /home/test/nix-portable ${escape cmd}"
