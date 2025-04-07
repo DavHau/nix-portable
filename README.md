@@ -179,6 +179,7 @@ The following environment variables are optional and can be used to override the
 ```txt
 NP_DEBUG      (1 = debug msgs; 2 = 'set -x' for nix-portable)
 NP_GIT        specify path to the git executable
+NP_SSH        (0 = don't install ssh; 1 = install ssh)
 NP_LOCATION   where to put the `.nix-portable` dir. (defaults to `$HOME`)
 NP_RUNTIME    which runtime to use (must be one of: nix, bwrap, proot)
 NP_NIX        specify the path to the static nix executable to use in case nix is selected as runtime
