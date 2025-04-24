@@ -96,6 +96,7 @@ let
     git = git.out; # TODO why not just "git"
     inherit
       bwrapStaticBin
+      nix
       nixStaticBin
       prootStaticBin
       zstdStaticBin
