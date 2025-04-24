@@ -25,8 +25,6 @@ with builtins;
 with lib;
 let
 
-  bwrap = bubblewrap;
-
   proot = prootStatic;
 
   inherit (pkgsStatic)
@@ -95,7 +93,7 @@ let
 
   runtimeScript = substituteAll {
     src = ./runtimeScript.sh;
-    bwrapStaticBin = packStaticBin "${bwrap}/bin/bwrap";
+    bwrapStaticBin = packStaticBin "${bubblewrap}/bin/bwrap";
     nixStaticBin = packStaticBin "${nixStatic}/bin/nix";
     prootStaticBin = packStaticBin "${proot}/bin/proot";
     zstdStaticBin = packStaticBin "${zstd}/bin/zstd";
