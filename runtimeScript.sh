@@ -331,13 +331,13 @@ if [ -z "$NP_RUNTIME" ]; then
   # check if bwrap works properly
   elif \
       debug "nix --store failed -> testing bwrap" \
-      && $NP_BWRAP --bind "$dir"/emptyroot / --bind "$dir"/ /nix --bind "$dir"/busybox/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
+      && $NP_BWRAP --bind "$dir"/emptyroot / --bind "$dir"/nix /nix --bind "$dir"/busybox/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
     debug "bwrap seems to work on this system -> will use bwrap"
     NP_RUNTIME=bwrap
   # check if proot works properly
   elif \
       debug "bwrap failed -> testing proot" \
-      && $NP_PROOT -b "$dir"/emptyroot:/ -b "$dir"/:/nix -b "$dir"/busybox/bin/busybox:"$dir/true" "$dir/true" 2>&3 ; then
+      && $NP_PROOT -b "$dir"/emptyroot:/ -b "$dir"/nix:/nix -b "$dir"/busybox/bin/busybox:"$dir/true" -b "$PWD:$PWD" "$dir/true" 2>&3 ; then
     debug "proot seems to work on this system -> will use proot"
     NP_RUNTIME=proot
   else
