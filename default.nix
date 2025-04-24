@@ -51,15 +51,12 @@ let
       nativeBuildInputs = [ pkgsBuild.perl pkgsBuild.zstd ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
       buildCommand = ''
-        storePaths=$(perl ${pkgsBuild.pathsFromGraph} ./closure-*)
         mkdir $out
-        echo $storePaths > $out/index
         cp -r ${pkgsBuild.closureInfo { rootPaths = targets; }} $out/closureInfo
-
         tar -cf - \
           --owner=0 --group=0 --mode=u+rw,uga+r \
           --hard-dereference \
-          $storePaths | ${compression} > $out/tar
+          $(cat $out/closureInfo/store-paths) | ${compression} > $out/tar
       '';
     };
 
