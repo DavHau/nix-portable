@@ -363,7 +363,8 @@ if [ "$NP_RUNTIME" == "nix" ]; then
   recreate_nix_conf
 elif [ "$NP_RUNTIME" == "bwrap" ]; then
   collectBinds
-  makeBindArgs --bind " " "$toBind" "$sslBind"
+  # shellcheck disable=SC2086
+  makeBindArgs --bind " " $toBind $sslBind
   run="$NP_BWRAP $BWRAP_ARGS \
     --bind $dir/emptyroot / \
     --dev-bind /dev /dev \
@@ -373,7 +374,8 @@ elif [ "$NP_RUNTIME" == "bwrap" ]; then
 else
   # proot
   collectBinds
-  makeBindArgs -b ":" "$toBind" "$sslBind"
+  # shellcheck disable=SC2086
+  makeBindArgs -b ":" $toBind $sslBind
   run="$NP_PROOT $PROOT_ARGS \
     -r $dir/emptyroot \
     -b /dev:/dev \
