@@ -1,6 +1,6 @@
 with builtins;
 {
-  bwrap,
+  bubblewrap,
   nix,
   proot,
   unzip,
@@ -26,6 +26,8 @@ with builtins;
 }:
 with lib;
 let
+
+  bwrap = bubblewrap;
 
   pname =
     if bundledPackage == null
