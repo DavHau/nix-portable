@@ -137,19 +137,16 @@ let
     $zip $out/bin/nix-portable.zip ${caBundleZstd}
 
     # create fingerprint
-    fp=$(sha256sum $out/bin/nix-portable.zip | cut -d " "  -f 1)
-    sed -i "s/_FINGERPRINT_PLACEHOLDER_/$fp/g" $out/bin/nix-portable.zip
-    # fix broken zip header due to manual modification
-    ${zip}/bin/zip -F $out/bin/nix-portable.zip --out $out/bin/nix-portable-fixed.zip
+    fp=$(sha256sum $out/bin/nix-portable.zip | head -c64)
+    sed -i "0,/_FINGERPRINT_PLACEHOLDER_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/s//$fp/" $out/bin/nix-portable.zip
 
-    rm $out/bin/nix-portable.zip
     executable=${if bundledPackage == null then "" else bundledExe}
     if [ "$executable" == "" ]; then
       target="$out/bin/nix-portable"
     else
       target="$out/bin/$(basename "$executable")"
     fi
-    mv $out/bin/nix-portable-fixed.zip "$target"
+    mv $out/bin/nix-portable.zip "$target"
     chmod +x "$target"
   '';
 in

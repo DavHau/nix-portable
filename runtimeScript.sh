@@ -50,7 +50,7 @@ fi
 self="$(realpath "${BASH_SOURCE[0]}")"
 
 # fingerprint will be inserted by builder
-fingerprint="_FINGERPRINT_PLACEHOLDER_"
+fingerprint="_FINGERPRINT_PLACEHOLDER_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # user specified location for program files and nix store
 [ -z "$NP_LOCATION" ] && NP_LOCATION="$HOME"
