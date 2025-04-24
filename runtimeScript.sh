@@ -310,18 +310,18 @@ if [ -z "$NP_RUNTIME" ]; then
   if [ "$last_auto_runtime" != "" ]; then
     NP_RUNTIME="$last_auto_runtime"
   # check if nix --store works
-  elif \\
-      debug "testing nix --store" \\
-      && mkdir -p $dir/tmp/ \\
-      && touch $dir/tmp/testfile \\
+  elif \
+      debug "testing nix --store" \
+      && mkdir -p $dir/tmp/ \
+      && touch $dir/tmp/testfile \
       && "$NP_NIX" --store "$dir/tmp/__store" shell -f "$dir/mini-drv.nix" -c "$dir/bin/nix" store add-file --store "$dir/tmp/__store" "$dir/tmp/testfile" >/dev/null 2>&3; then
     chmod -R +w $dir/tmp/__store
     rm -r $dir/tmp/__store
     debug "nix --store works on this system -> will use nix as runtime"
     NP_RUNTIME=nix
   # check if bwrap works properly
-  elif \\
-      debug "nix --store failed -> testing bwrap" \\
+  elif \
+      debug "nix --store failed -> testing bwrap" \
       && $NP_BWRAP --bind $dir/emptyroot / --bind $dir/ /nix --bind $dir/busybox/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
     debug "bwrap seems to work on this system -> will use bwrap"
     NP_RUNTIME=bwrap
@@ -342,22 +342,22 @@ if [ "$NP_RUNTIME" == "nix" ]; then
 elif [ "$NP_RUNTIME" == "bwrap" ]; then
   collectBinds
   makeBindArgs --bind " " $toBind $sslBind
-  run="$NP_BWRAP $BWRAP_ARGS \\
-    --bind $dir/emptyroot /\\
-    --dev-bind /dev /dev\\
-    --bind $dir/nix /nix\\
+  run="$NP_BWRAP $BWRAP_ARGS \
+    --bind $dir/emptyroot / \
+    --dev-bind /dev /dev \
+    --bind $dir/nix /nix \
     $binds"
-    # --bind $dir/busybox/bin/busybox /bin/sh\\
+    # --bind $dir/busybox/bin/busybox /bin/sh \
 else
   # proot
   collectBinds
   makeBindArgs -b ":" $toBind $sslBind
-  run="$NP_PROOT $PROOT_ARGS\\
-    -r $dir/emptyroot\\
-    -b /dev:/dev\\
-    -b $dir/nix:/nix\\
+  run="$NP_PROOT $PROOT_ARGS \
+    -r $dir/emptyroot \
+    -b /dev:/dev \
+    -b $dir/nix:/nix \
     $binds"
-    # -b $dir/busybox/bin/busybox:/bin/sh\\
+    # -b $dir/busybox/bin/busybox:/bin/sh \
 fi
 debug "base command will be: $run"
 
