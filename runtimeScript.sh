@@ -17,7 +17,7 @@ bundledExe=@bundledExe@
 
 set -eo pipefail
 
-start=$(date +%s%N)  # start time in nanoseconds
+start="$(date +%s%N)"  # start time in nanoseconds
 
 # dump environment on exit if debug is enabled
 if [ -n "$NP_DEBUG" ] && [ "$NP_DEBUG" -ge 1 ]; then
@@ -25,7 +25,7 @@ if [ -n "$NP_DEBUG" ] && [ "$NP_DEBUG" -ge 1 ]; then
 fi
 
 # there seem to be less issues with proot when disabling seccomp
-export PROOT_NO_SECCOMP=${PROOT_NO_SECCOMP:-1}
+export PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}"
 
 set -e
 if [ -n "$NP_DEBUG" ] && [ "$NP_DEBUG" -ge 2 ]; then
@@ -36,7 +36,7 @@ fi
 # depending on the setting
 if [ -n "$NP_DEBUG" ] && [ "$NP_DEBUG" -ge 1 ]; then
   debug(){
-    echo $@ || true
+    echo "$@" || true
   }
   exec 3>&2
 else
@@ -86,26 +86,28 @@ else
 fi
 
 # Nix portable ships its own nix.conf
-export NIX_CONF_DIR=$dir/conf/
+export NIX_CONF_DIR="$dir"/conf/
 
-NP_CONF_SANDBOX=${NP_CONF_SANDBOX:-false}
-NP_CONF_STORE=${NP_CONF_STORE:-auto}
+NP_CONF_SANDBOX="${NP_CONF_SANDBOX:-false}"
+NP_CONF_STORE="${NP_CONF_STORE:-auto}"
 
 
 recreate_nix_conf(){
   mkdir -p "$NIX_CONF_DIR"
   rm -f "$NIX_CONF_DIR/nix.conf"
 
-  # static config
-  echo "build-users-group = " >> "$dir"/conf/nix.conf
-  echo "experimental-features = nix-command flakes" >> "$dir"/conf/nix.conf
-  echo "ignored-acls = security.selinux system.nfs4_acl" >> "$dir"/conf/nix.conf
-  echo "use-sqlite-wal = false" >> "$dir"/conf/nix.conf
-  echo "sandbox-paths = /bin/sh=$dir/busybox/bin/busybox" >> "$dir"/conf/nix.conf
+  {
+    # static config
+    echo "build-users-group = "
+    echo "experimental-features = nix-command flakes"
+    echo "ignored-acls = security.selinux system.nfs4_acl"
+    echo "use-sqlite-wal = false"
+    echo "sandbox-paths = /bin/sh=$dir/busybox/bin/busybox"
 
-  # configurable config
-  echo "sandbox = $NP_CONF_SANDBOX" >> "$dir"/conf/nix.conf
-  echo "store = $NP_CONF_STORE" >> "$dir"/conf/nix.conf
+    # configurable config
+    echo "sandbox = $NP_CONF_SANDBOX"
+    echo "store = $NP_CONF_STORE"
+  } > "$NIX_CONF_DIR/nix.conf"
 }
 
 
@@ -147,8 +149,9 @@ else
 
   # install busybox
   mkdir -p "$dir"/busybox/bin
+  # TODO why not: cp "$busyboxStaticBin"/bin/busybox "$dir/busybox/bin/busybox"
   (base64 -d> "$dir/busybox/bin/busybox" && chmod +x "$dir/busybox/bin/busybox") << END
-$(cat "$busybox"/bin/busybox | base64)
+$(base64 < "$busyboxStaticBin"/bin/busybox)
 END
   for bin in $busyboxBins; do
     [ ! -e "$dir/busybox/bin/$bin" ] && ln -s busybox "$dir/busybox/bin/$bin"
@@ -163,7 +166,7 @@ END
   installBin $nixStaticBin "nix"
 
   # install ssl cert bundle
-  unzip -poj "$self" $(removePrefix "/" $caBundleZstd) | "$dir"/bin/zstd -d > "$dir"/ca-bundle.crt
+  unzip -poj "$self" "$(removePrefix "/" "$caBundleZstd")" | "$dir"/bin/zstd -d > "$dir"/ca-bundle.crt
 
   recreate_nix_conf
 fi
@@ -176,14 +179,16 @@ debug "figuring out ssl certs"
 if [ -z "$SSL_CERT_FILE" ]; then
   debug "SSL_CERT_FILE not defined. trying to find certs automatically"
   if [ -e /etc/ssl/certs/ca-bundle.crt ]; then
-    export SSL_CERT_FILE=$(realpath /etc/ssl/certs/ca-bundle.crt)
+    SSL_CERT_FILE="$(realpath /etc/ssl/certs/ca-bundle.crt)"
+    export SSL_CERT_FILE
     debug "found /etc/ssl/certs/ca-bundle.crt with real path $SSL_CERT_FILE"
   elif [ -e /etc/ssl/certs/ca-certificates.crt ]; then
-    export SSL_CERT_FILE=$(realpath /etc/ssl/certs/ca-certificates.crt)
+    SSL_CERT_FILE="$(realpath /etc/ssl/certs/ca-certificates.crt)"
+    export SSL_CERT_FILE
     debug "found /etc/ssl/certs/ca-certificates.crt with real path $SSL_CERT_FILE"
   elif [ ! -e /etc/ssl/certs ]; then
     debug "/etc/ssl/certs does not exist. Will use certs from nixpkgs."
-    export SSL_CERT_FILE=$dir/ca-bundle.crt
+    export SSL_CERT_FILE="$dir"/ca-bundle.crt
   else
     debug "certs seem to reside in /etc/ssl/certs. No need to set up anything"
   fi
@@ -211,7 +216,7 @@ fi
 
 
 storePathOfFile(){
-  file=$(realpath "$1")
+  file="$(realpath "$1")"
   sPath="$(echo "$file" | awk -F "/" 'BEGIN{OFS="/";}{print $2,$3,$4}')"
   echo "/$sPath"
 }
@@ -227,10 +232,10 @@ collectBinds(){
   toBind=""
   for p in $pathsTopLevel; do
     if [ -e "$p" ]; then
-      real=$(realpath "$p")
+      real="$(realpath "$p")"
       if [ -e "$real" ]; then
         if [[ "$real" == /nix/store/* ]]; then
-          storePath=$(storePathOfFile "$real")
+          storePath="$(storePathOfFile "$real")"
           toBind="$toBind $storePath $storePath"
         else
           toBind="$toBind $real $p"
@@ -245,10 +250,10 @@ collectBinds(){
 
   for p in $paths; do
     if [ -e "$p" ]; then
-      real=$(realpath "$p")
+      real="$(realpath "$p")"
       if [ -e "$real" ]; then
         if [[ "$real" == /nix/store/* ]]; then
-          storePath=$(storePathOfFile "$real")
+          storePath="$(storePathOfFile "$real")"
           toBind="$toBind $storePath $storePath"
         else
           toBind="$toBind $real $real"
@@ -267,8 +272,8 @@ collectBinds(){
 
 
 makeBindArgs(){
-  arg=$1; shift
-  sep=$1; shift
+  arg="$1"; shift
+  sep="$1"; shift
   binds=""
   while :; do
     if [ -n "$1" ]; then
@@ -285,14 +290,14 @@ makeBindArgs(){
 
 ### select container runtime
 debug "figuring out which runtime to use"
-[ -z "$NP_BWRAP" ] && NP_BWRAP=$(PATH="$PATH_OLD:$PATH" which bwrap 2>/dev/null) || true
-[ -z "$NP_BWRAP" ] && NP_BWRAP=$dir/bin/bwrap
+if [ -z "$NP_BWRAP" ]; then NP_BWRAP="$(PATH="$PATH_OLD:$PATH" which bwrap 2>/dev/null)"; fi
+if [ -z "$NP_BWRAP" ]; then NP_BWRAP="$dir"/bin/bwrap; fi
 debug "bwrap executable: $NP_BWRAP"
-# [ -z "$NP_NIX ] && NP_NIX=$(PATH="$PATH_OLD:$PATH" which nix 2>/dev/null) || true
-[ -z "$NP_NIX" ] && NP_NIX=$dir/bin/nix
+# if [ -z "$NP_NIX ]; then NP_NIX="$(PATH="$PATH_OLD:$PATH" which nix 2>/dev/null)"; fi
+if [ -z "$NP_NIX" ]; then NP_NIX="$dir"/bin/nix; fi
 debug "nix executable: $NP_NIX"
-[ -z "$NP_PROOT" ] && NP_PROOT=$(PATH="$PATH_OLD:$PATH" which proot 2>/dev/null) || true
-[ -z "$NP_PROOT" ] && NP_PROOT=$dir/bin/proot
+if [ -z "$NP_PROOT" ]; then NP_PROOT="$(PATH="$PATH_OLD:$PATH" which proot 2>/dev/null)"; fi
+if [ -z "$NP_PROOT" ]; then NP_PROOT="$dir"/bin/proot; fi
 debug "proot executable: $NP_PROOT"
 debug "testing all available runtimes..."
 if [ -z "$NP_RUNTIME" ]; then
@@ -336,7 +341,8 @@ fi
 debug "NP_RUNTIME: $NP_RUNTIME"
 if [ "$NP_RUNTIME" == "nix" ]; then
   run="$NP_NIX shell -f $dir/mini-drv.nix -c"
-  export PATH="$PATH:$store$(removePrefix "/nix/store" $nix)/bin"
+  PATH="$PATH:$store$(removePrefix "/nix/store" $nix)/bin"
+  export PATH
   NP_CONF_STORE="$dir"
   recreate_nix_conf
 elif [ "$NP_RUNTIME" == "bwrap" ]; then
@@ -375,13 +381,14 @@ mkdir -p "$dir"/channels
 index="$(cat $storeTar/index)"
 
 # if [ ! "$NP_RUNTIME" == "nix" ]; then
-  export missing=$(
+  missing="$(
     for path in $index; do
-      if [ ! -e "$store"/$(basename "$path") ]; then
+      if [ ! -e "$store/$(basename "$path")" ]; then
         echo "nix/store/$(basename "$path")"
       fi
     done
-  )
+  )"
+  export missing
 
   if [ -n "$missing" ]; then
     debug "extracting missing store paths"
@@ -389,7 +396,7 @@ index="$(cat $storeTar/index)"
       mkdir -p "$dir"/tmp "$store"/
       rm -rf "$dir"/tmp/*
       cd "$dir"/tmp
-      unzip -qqp "$self" $(removePrefix "/" "$storeTar/tar") \
+      unzip -qqp "$self" "$(removePrefix "/" "$storeTar/tar")" \
         | "$dir"/bin/zstd -d \
         | tar -x "$missing" --strip-components 2
       mv "$dir"/tmp/* "$store"/
@@ -399,7 +406,7 @@ index="$(cat $storeTar/index)"
 
   if [ -n "$missing" ]; then
     debug "registering new store paths to DB"
-    reg="$(cat $storeTar/closureInfo/registration)"
+    # reg="$(cat $storeTar/closureInfo/registration)"
     cmd="$run $store$(removePrefix "/nix/store" $nix)/bin/nix-store --load-db"
     debug "running command: $cmd"
     # echo "$reg" | $cmd
@@ -412,7 +419,7 @@ index="$(cat $storeTar/index)"
 # - executing './nix-portable BIN_NAME',
 # - symlinking to nix-portable, in which case the name of the symlink selects the nix executable
 # Alternatively the executable can be hardcoded by specifying the argument 'executable' of nix-portable's default.nix file.
-executable=$bundledExe
+executable="$bundledExe"
 if [ "$executable" != "" ]; then
   bin="$executable"
   debug "executable is hardcoded to: $bin"
@@ -436,7 +443,7 @@ fi
 
 ### check which runtime has been used previously
 if [ -f "$dir/conf/last_runtime" ]; then
-  lastRuntime=$(cat "$dir/conf/last_runtime")
+  lastRuntime="$(cat "$dir/conf/last_runtime")"
 else
   lastRuntime=
 fi
@@ -490,9 +497,9 @@ export PATH="$dir/tmpbin:$PATH"
 
 
 ### install git via nix, if git installation is not in /nix path
-if $doInstallGit && [ ! -e "$store"$(removePrefix "/nix/store" $git) ] ; then
+if $doInstallGit && [ ! -e "$store$(removePrefix "/nix/store" $git)" ] ; then
   echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'"
-  $run "$store"$(removePrefix "/nix/store" $nix)/bin/nix build --impure --no-link --expr "
+  $run "$store$(removePrefix "/nix/store" $nix)/bin/nix" build --impure --no-link --expr "
     (import $nixpkgsSrc {}).$gitAttribute.out
   "
 else
@@ -507,22 +514,16 @@ fi
 
 
 ### print elapsed time
-end=$(date +%s%N)  # end time in nanoseconds
+end="$(date +%s%N)"  # end time in nanoseconds
 # time elapsed in millis with two decimal places
-# elapsed=$(echo "scale=2; ($end - $start)/1000000000" | bc)
-elapsed=$(echo "scale=2; ($end - $start)/1000000" | bc)
+# elapsed="$(echo "scale=2; ($end - $start)/1000000000" | bc)"
+elapsed="$(echo "scale=2; ($end - $start)/1000000" | bc)"
 debug "Time to initialize nix-portable: $elapsed millis"
 
 
 
 ### run commands
 [ -z "$NP_RUN" ] && NP_RUN="$run"
-if [ "$NP_RUNTIME" == "proot" ]; then
-  debug "running command: $NP_RUN $bin $@"
-  exec $NP_RUN "$bin" "$@"
-else
-  cmd="$NP_RUN $bin $@"
-  debug "running command: $cmd"
-  exec $NP_RUN "$bin" "$@"
-fi
+debug "running command: $NP_RUN $bin $*"
+exec $NP_RUN "$bin" "$@"
 exit
