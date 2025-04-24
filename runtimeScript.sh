@@ -307,6 +307,7 @@ if [ -z "$NP_RUNTIME" ]; then
   fi
   if [ -f "$dir/conf/last_auto_runtime" ]; then
     last_auto_runtime="$(cat "$dir/conf/last_auto_runtime")"
+    # FIXME validate the cache. does the cached runtime still work?
   else
     last_auto_runtime=
   fi
