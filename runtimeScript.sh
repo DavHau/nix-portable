@@ -19,9 +19,12 @@ set -eo pipefail
 
 start="$(date +%s%N)"  # start time in nanoseconds
 
+unzip_quiet="-qq"
+
 # dump environment on exit if debug is enabled
 if [ -n "$NP_DEBUG" ] && [ "$NP_DEBUG" -ge 1 ]; then
   trap "declare -p > /tmp/np_env" EXIT
+  unzip_quiet=
 fi
 
 # there seem to be less issues with proot when disabling seccomp
@@ -132,7 +135,7 @@ function removePrefix() {
 function installBin() {
   local pkg="$1"
   local bin="$2"
-  unzip -qqoj "$self" "$(removePrefix "/" "$pkg/bin/$bin")" -d "$dir"/bin
+  unzip $unzip_quiet -oj "$self" "$(removePrefix "/" "$pkg/bin/$bin")" -d "$dir"/bin
   chmod +wx "$dir"/bin/"$bin";
 }
 
@@ -170,7 +173,7 @@ else
   installBin $nixStaticBin "nix"
 
   # install ssl cert bundle
-  unzip -poj "$self" "$(removePrefix "/" "$caBundleZstd")" | "$dir"/bin/zstd -d > "$dir"/ca-bundle.crt
+  unzip $unzip_quiet -poj "$self" "$(removePrefix "/" "$caBundleZstd")" | "$dir"/bin/zstd -d > "$dir"/ca-bundle.crt
 
   recreate_nix_conf
 fi
@@ -416,7 +419,7 @@ index="$(cat $storeTar/closureInfo/store-paths)"
       rm -rf "$dir"/tmp/*
       cd "$dir"/tmp
       # shellcheck disable=SC2086
-      unzip -qqp "$self" "$(removePrefix "/" "$storeTar/tar")" \
+      unzip $unzip_quiet -p "$self" "$(removePrefix "/" "$storeTar/tar")" \
         | "$dir"/bin/zstd -d \
         | tar -x $missing --strip-components 2
       mv "$dir"/tmp/* "$store"/
