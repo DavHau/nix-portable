@@ -47,7 +47,7 @@ else
 fi
 
 # to reference this script's file
-self="$(realpath ${BASH_SOURCE[0]})"
+self="$(realpath "${BASH_SOURCE[0]}")"
 
 # fingerprint will be inserted by builder
 fingerprint="_FINGERPRINT_PLACEHOLDER_"
@@ -58,7 +58,7 @@ NP_LOCATION="$(readlink -f "$NP_LOCATION")"
 dir="$NP_LOCATION/.nix-portable"
 store="$dir/nix/store"
 # create /nix/var/nix to prevent nix from falling back to chroot store.
-mkdir -p $dir/{bin,nix/var/nix,nix/store}
+mkdir -p "$dir"/{bin,nix/var/nix,nix/store}
 # sanitize the tmpbin directory
 rm -rf "$dir/tmpbin"
 # create a directory to hold executable symlinks for overriding
@@ -79,7 +79,7 @@ EOF
 
 # the fingerprint being present inside a file indicates that
 # this version of nix-portable has already been initialized
-if test -e $dir/conf/fingerprint && [ "$(cat $dir/conf/fingerprint)" == "$fingerprint" ]; then
+if test -e "$dir"/conf/fingerprint && [ "$(cat "$dir"/conf/fingerprint)" == "$fingerprint" ]; then
   newNPVersion=false
 else
   newNPVersion=true
@@ -97,15 +97,15 @@ recreate_nix_conf(){
   rm -f "$NIX_CONF_DIR/nix.conf"
 
   # static config
-  echo "build-users-group = " >> $dir/conf/nix.conf
-  echo "experimental-features = nix-command flakes" >> $dir/conf/nix.conf
-  echo "ignored-acls = security.selinux system.nfs4_acl" >> $dir/conf/nix.conf
-  echo "use-sqlite-wal = false" >> $dir/conf/nix.conf
-  echo "sandbox-paths = /bin/sh=$dir/busybox/bin/busybox" >> $dir/conf/nix.conf
+  echo "build-users-group = " >> "$dir"/conf/nix.conf
+  echo "experimental-features = nix-command flakes" >> "$dir"/conf/nix.conf
+  echo "ignored-acls = security.selinux system.nfs4_acl" >> "$dir"/conf/nix.conf
+  echo "use-sqlite-wal = false" >> "$dir"/conf/nix.conf
+  echo "sandbox-paths = /bin/sh=$dir/busybox/bin/busybox" >> "$dir"/conf/nix.conf
 
   # configurable config
-  echo "sandbox = $NP_CONF_SANDBOX" >> $dir/conf/nix.conf
-  echo "store = $NP_CONF_STORE" >> $dir/conf/nix.conf
+  echo "sandbox = $NP_CONF_SANDBOX" >> "$dir"/conf/nix.conf
+  echo "store = $NP_CONF_STORE" >> "$dir"/conf/nix.conf
 }
 
 
@@ -126,8 +126,8 @@ function removePrefix() {
 function installBin() {
   local pkg="$1"
   local bin="$2"
-  unzip -qqoj "$self" "$(removePrefix "/" "$pkg/bin/$bin")" -d $dir/bin
-  chmod +wx $dir/bin/$bin;
+  unzip -qqoj "$self" "$(removePrefix "/" "$pkg/bin/$bin")" -d "$dir"/bin
+  chmod +wx "$dir"/bin/"$bin";
 }
 
 PATH_OLD="$PATH"
@@ -143,12 +143,12 @@ else
 
   debug "installing files"
 
-  mkdir -p $dir/emptyroot
+  mkdir -p "$dir"/emptyroot
 
   # install busybox
-  mkdir -p $dir/busybox/bin
+  mkdir -p "$dir"/busybox/bin
   (base64 -d> "$dir/busybox/bin/busybox" && chmod +x "$dir/busybox/bin/busybox") << END
-$(cat $busybox/bin/busybox | base64)
+$(cat "$busybox"/bin/busybox | base64)
 END
   for bin in $busyboxBins; do
     [ ! -e "$dir/busybox/bin/$bin" ] && ln -s busybox "$dir/busybox/bin/$bin"
@@ -163,7 +163,7 @@ END
   installBin $nixStaticBin "nix"
 
   # install ssl cert bundle
-  unzip -poj "$self" $(removePrefix "/" $caBundleZstd) | $dir/bin/zstd -d > $dir/ca-bundle.crt
+  unzip -poj "$self" $(removePrefix "/" $caBundleZstd) | "$dir"/bin/zstd -d > "$dir"/ca-bundle.crt
 
   recreate_nix_conf
 fi
@@ -189,7 +189,7 @@ if [ -z "$SSL_CERT_FILE" ]; then
   fi
 fi
 if [ -n "$SSL_CERT_FILE" ]; then
-  sslBind="$(realpath $SSL_CERT_FILE) $dir/ca-bundle.crt"
+  sslBind="$(realpath "$SSL_CERT_FILE") $dir/ca-bundle.crt"
   export SSL_CERT_FILE="$dir/ca-bundle.crt"
 else
   sslBind="/etc/ssl /etc/ssl"
@@ -211,8 +211,8 @@ fi
 
 
 storePathOfFile(){
-  file=$(realpath $1)
-  sPath="$(echo $file | awk -F "/" 'BEGIN{OFS="/";}{print $2,$3,$4}')"
+  file=$(realpath "$1")
+  sPath="$(echo "$file" | awk -F "/" 'BEGIN{OFS="/";}{print $2,$3,$4}')"
   echo "/$sPath"
 }
 
@@ -227,10 +227,10 @@ collectBinds(){
   toBind=""
   for p in $pathsTopLevel; do
     if [ -e "$p" ]; then
-      real=$(realpath $p)
+      real=$(realpath "$p")
       if [ -e "$real" ]; then
         if [[ "$real" == /nix/store/* ]]; then
-          storePath=$(storePathOfFile $real)
+          storePath=$(storePathOfFile "$real")
           toBind="$toBind $storePath $storePath"
         else
           toBind="$toBind $real $p"
@@ -245,10 +245,10 @@ collectBinds(){
 
   for p in $paths; do
     if [ -e "$p" ]; then
-      real=$(realpath $p)
+      real=$(realpath "$p")
       if [ -e "$real" ]; then
         if [[ "$real" == /nix/store/* ]]; then
-          storePath=$(storePathOfFile $real)
+          storePath=$(storePathOfFile "$real")
           toBind="$toBind $storePath $storePath"
         else
           toBind="$toBind $real $real"
@@ -312,17 +312,17 @@ if [ -z "$NP_RUNTIME" ]; then
   # check if nix --store works
   elif \
       debug "testing nix --store" \
-      && mkdir -p $dir/tmp/ \
-      && touch $dir/tmp/testfile \
+      && mkdir -p "$dir"/tmp/ \
+      && touch "$dir"/tmp/testfile \
       && "$NP_NIX" --store "$dir/tmp/__store" shell -f "$dir/mini-drv.nix" -c "$dir/bin/nix" store add-file --store "$dir/tmp/__store" "$dir/tmp/testfile" >/dev/null 2>&3; then
-    chmod -R +w $dir/tmp/__store
-    rm -r $dir/tmp/__store
+    chmod -R +w "$dir"/tmp/__store
+    rm -r "$dir"/tmp/__store
     debug "nix --store works on this system -> will use nix as runtime"
     NP_RUNTIME=nix
   # check if bwrap works properly
   elif \
       debug "nix --store failed -> testing bwrap" \
-      && $NP_BWRAP --bind $dir/emptyroot / --bind $dir/ /nix --bind $dir/busybox/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
+      && $NP_BWRAP --bind "$dir"/emptyroot / --bind "$dir"/ /nix --bind "$dir"/busybox/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
     debug "bwrap seems to work on this system -> will use bwrap"
     NP_RUNTIME=bwrap
   else
@@ -341,7 +341,7 @@ if [ "$NP_RUNTIME" == "nix" ]; then
   recreate_nix_conf
 elif [ "$NP_RUNTIME" == "bwrap" ]; then
   collectBinds
-  makeBindArgs --bind " " $toBind $sslBind
+  makeBindArgs --bind " " "$toBind" "$sslBind"
   run="$NP_BWRAP $BWRAP_ARGS \
     --bind $dir/emptyroot / \
     --dev-bind /dev /dev \
@@ -351,7 +351,7 @@ elif [ "$NP_RUNTIME" == "bwrap" ]; then
 else
   # proot
   collectBinds
-  makeBindArgs -b ":" $toBind $sslBind
+  makeBindArgs -b ":" "$toBind" "$sslBind"
   run="$NP_PROOT $PROOT_ARGS \
     -r $dir/emptyroot \
     -b /dev:/dev \
@@ -365,8 +365,8 @@ debug "base command will be: $run"
 
 ### setup environment
 export NIX_PATH="$dir/channels:nixpkgs=$dir/channels/nixpkgs"
-mkdir -p $dir/channels
-[ -h $dir/channels/nixpkgs ] || ln -s $nixpkgsSrc $dir/channels/nixpkgs
+mkdir -p "$dir"/channels
+[ -h "$dir"/channels/nixpkgs ] || ln -s $nixpkgsSrc "$dir"/channels/nixpkgs
 
 
 ### install nix store
@@ -377,8 +377,8 @@ index="$(cat $storeTar/index)"
 # if [ ! "$NP_RUNTIME" == "nix" ]; then
   export missing=$(
     for path in $index; do
-      if [ ! -e $store/$(basename $path) ]; then
-        echo "nix/store/$(basename $path)"
+      if [ ! -e "$store"/$(basename "$path") ]; then
+        echo "nix/store/$(basename "$path")"
       fi
     done
   )
@@ -386,15 +386,15 @@ index="$(cat $storeTar/index)"
   if [ -n "$missing" ]; then
     debug "extracting missing store paths"
     (
-      mkdir -p $dir/tmp $store/
-      rm -rf $dir/tmp/*
-      cd $dir/tmp
+      mkdir -p "$dir"/tmp "$store"/
+      rm -rf "$dir"/tmp/*
+      cd "$dir"/tmp
       unzip -qqp "$self" $(removePrefix "/" "$storeTar/tar") \
-        | $dir/bin/zstd -d \
-        | tar -x $missing --strip-components 2
-      mv $dir/tmp/* $store/
+        | "$dir"/bin/zstd -d \
+        | tar -x "$missing" --strip-components 2
+      mv "$dir"/tmp/* "$store"/
     )
-    rm -rf $dir/tmp
+    rm -rf "$dir"/tmp
   fi
 
   if [ -n "$missing" ]; then
@@ -416,20 +416,20 @@ executable=$bundledExe
 if [ "$executable" != "" ]; then
   bin="$executable"
   debug "executable is hardcoded to: $bin"
-elif [[ "$(basename $0)" == nix-portable* ]]; then\
+elif [[ "$(basename "$0")" == nix-portable* ]]; then\
   if [ -z "$1" ]; then
     echo "Error: please specify the nix binary to execute"
     echo "Alternatively symlink against $0"
     exit 1
   elif [ "$1" == "debug" ]; then
-    bin="$(which $2)"
+    bin="$(which "$2")"
     shift; shift
   else
     bin="$store$(removePrefix "/nix/store" $nix)/bin/$1"
     shift
   fi
 else
-  bin="$store$(removePrefix "/nix/store" $nix)/bin/$(basename $0)"
+  bin="$store$(removePrefix "/nix/store" $nix)/bin/$(basename "$0")"
 fi
 
 
@@ -475,8 +475,8 @@ fi
 if [ "$newNPVersion" == "true" ]; then
   echo -n "$fingerprint" > "$dir/conf/fingerprint"
 fi
-if [ "$lastRuntime" != $NP_RUNTIME ]; then
-  echo -n $NP_RUNTIME > "$dir/conf/last_runtime"
+if [ "$lastRuntime" != "$NP_RUNTIME" ]; then
+  echo -n "$NP_RUNTIME" > "$dir/conf/last_runtime"
 fi
 
 
@@ -490,9 +490,9 @@ export PATH="$dir/tmpbin:$PATH"
 
 
 ### install git via nix, if git installation is not in /nix path
-if $doInstallGit && [ ! -e $store$(removePrefix "/nix/store" $git) ] ; then
+if $doInstallGit && [ ! -e "$store"$(removePrefix "/nix/store" $git) ] ; then
   echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'"
-  $run $store$(removePrefix "/nix/store" $nix)/bin/nix build --impure --no-link --expr "
+  $run "$store"$(removePrefix "/nix/store" $nix)/bin/nix build --impure --no-link --expr "
     (import $nixpkgsSrc {}).$gitAttribute.out
   "
 else
@@ -519,10 +519,10 @@ debug "Time to initialize nix-portable: $elapsed millis"
 [ -z "$NP_RUN" ] && NP_RUN="$run"
 if [ "$NP_RUNTIME" == "proot" ]; then
   debug "running command: $NP_RUN $bin $@"
-  exec $NP_RUN $bin "$@"
+  exec $NP_RUN "$bin" "$@"
 else
   cmd="$NP_RUN $bin $@"
   debug "running command: $cmd"
-  exec $NP_RUN $bin "$@"
+  exec $NP_RUN "$bin" "$@"
 fi
 exit
