@@ -289,13 +289,13 @@ makeBindArgs(){
 
 ### select container runtime
 debug "figuring out which runtime to use"
-if [ -z "$NP_BWRAP" ]; then NP_BWRAP="$(PATH="$PATH_OLD:$PATH" which bwrap 2>/dev/null)"; fi
+if [ -z "$NP_BWRAP" ]; then NP_BWRAP="$(PATH="$PATH_OLD:$PATH" which bwrap 2>/dev/null || true)"; fi
 if [ -z "$NP_BWRAP" ]; then NP_BWRAP="$dir"/bin/bwrap; fi
 debug "bwrap executable: $NP_BWRAP"
-# if [ -z "$NP_NIX ]; then NP_NIX="$(PATH="$PATH_OLD:$PATH" which nix 2>/dev/null)"; fi
+# if [ -z "$NP_NIX ]; then NP_NIX="$(PATH="$PATH_OLD:$PATH" which nix 2>/dev/null || true)"; fi
 if [ -z "$NP_NIX" ]; then NP_NIX="$dir"/bin/nix; fi
 debug "nix executable: $NP_NIX"
-if [ -z "$NP_PROOT" ]; then NP_PROOT="$(PATH="$PATH_OLD:$PATH" which proot 2>/dev/null)"; fi
+if [ -z "$NP_PROOT" ]; then NP_PROOT="$(PATH="$PATH_OLD:$PATH" which proot 2>/dev/null || true)"; fi
 if [ -z "$NP_PROOT" ]; then NP_PROOT="$dir"/bin/proot; fi
 debug "proot executable: $NP_PROOT"
 debug "testing all available runtimes..."
