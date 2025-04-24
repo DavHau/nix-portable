@@ -87,6 +87,7 @@ let
   nixStaticBin = packStaticBin "${nix}/bin/nix";
   prootStaticBin = packStaticBin "${proot}/bin/proot";
   zstdStaticBin = packStaticBin "${zstd}/bin/zstd";
+  busyboxStaticBin = packStaticBin "${busybox}/bin/busybox";
 
   runtimeScript = substituteAll {
     src = ./runtimeScript.sh;
@@ -98,6 +99,7 @@ let
       nixStaticBin
       prootStaticBin
       zstdStaticBin
+      busyboxStaticBin
       caBundleZstd
       storeTar
       nixpkgsSrc
