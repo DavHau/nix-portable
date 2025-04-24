@@ -377,7 +377,7 @@ mkdir -p "$dir"/channels
 ### install nix store
 # Install all the nix store paths necessary for the current nix-portable version
 # We only unpack missing store paths from the tar archive.
-index="$(cat $storeTar/index)"
+index="$(cat $storeTar/closureInfo/store-paths)"
 
 # if [ ! "$NP_RUNTIME" == "nix" ]; then
   missing="$(
