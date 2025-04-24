@@ -2,32 +2,43 @@ with builtins;
 {
   bubblewrap,
   nix,
-  proot,
+  # TODO use pkgs.pkgsStatic.proot
+  prootStatic ? pkgs.pkgsStatic.proot,
   unzip,
   zip,
   unixtools,
   substituteAll,
-
-  busybox ? pkgs.pkgsStatic.busybox,
-  cacert ? pkgs.cacert,
-  compression ? "zstd -19 -T0",
-  gnutar ? pkgs.pkgsStatic.gnutar,
-  lib ? pkgs.lib,
-  perl ? pkgs.perl,
-  pkgs ? import <nixpkgs> {},
-  xz ? pkgs.pkgsStatic.xz,
-  zstd ? pkgs.pkgsStatic.zstd,
-  nixStatic ? pkgs.pkgsStatic.nix,
-
+  lib,
+  perl,
+  cacert,
+  pkgs,
+  pkgsStatic,
+  compression ? "zstd -3 -T1",
   buildSystem ? builtins.currentSystem,
+  # # tar crashed on emulated aarch64 system
+  # buildSystem ? "x86_64-linux",
   # hardcode executable to run. Useful when creating a bundle.
   bundledPackage ? null,
   ...
 }:
+
 with lib;
 let
 
   bwrap = bubblewrap;
+
+  proot = prootStatic;
+
+  inherit (pkgsStatic)
+    busybox
+    gnutar
+    xz
+    zstd
+    #proot
+  ;
+
+  # TODO do we need both nix and nixStatic?
+  nixStatic = pkgs.pkgsStatic.nix;
 
   pname =
     if bundledPackage == null
