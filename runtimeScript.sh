@@ -15,6 +15,10 @@ gitAttribute=@gitAttribute@
 nixpkgsSrc=@nixpkgsSrc@
 bundledExe=@bundledExe@
 
+# sed interface
+busyboxOffset=@busyboxOffset@
+busyboxSize=@busyboxSize@
+
 set -eo pipefail
 
 start="$(date +%s%N)"  # start time in nanoseconds
@@ -157,8 +161,8 @@ else
   # install busybox
   mkdir -p "$dir"/busybox/bin
   if ! [ -e "$dir/busybox/bin/busybox" ]; then
-    unzip -qqoj "$self" "$(removePrefix "/" "$busyboxStaticBin/bin/busybox")" -d "$dir/busybox/bin"
-    chmod +w "$dir/busybox/bin/busybox"
+    tail -c+$((busyboxOffset + 1)) "$self" | head -c$busyboxSize >"$dir/busybox/bin/busybox" || true
+    chmod +x "$dir/busybox/bin/busybox"
   fi
   for bin in "${busyboxBins[@]}"; do
     [ ! -e "$dir/busybox/bin/$bin" ] && ln -s busybox "$dir/busybox/bin/$bin"
