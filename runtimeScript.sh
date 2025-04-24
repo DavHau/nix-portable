@@ -64,7 +64,7 @@ rm -rf "$dir/tmpbin"
 mkdir -p "$dir/tmpbin"
 
 # create minimal drv file for nix to spawn a nix shell
-cat >"$dir/mini-drv.nix" <<'EOF'
+miniDrv="$(cat <<'EOF'
 builtins.derivation {
   name = "foo";
   builder = "/bin/sh";
@@ -75,6 +75,10 @@ builtins.derivation {
   system = builtins.currentSystem;
 }
 EOF
+)"
+if [ "$(cat "$dir/mini-drv.nix" || true)" != "$miniDrv" ]; then
+  echo "$miniDrv" >"$dir/mini-drv.nix"
+fi
 
 # the fingerprint being present inside a file indicates that
 # this version of nix-portable has already been initialized
