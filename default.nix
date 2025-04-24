@@ -112,7 +112,7 @@ let
   nixPortable = pkgs.runCommand pname {nativeBuildInputs = [unixtools.xxd unzip];} ''
     mkdir -p $out/bin
     cp ${runtimeScript} $out/bin/nix-portable.zip
-    xxd $out/bin/nix-portable.zip | tail
+    chmod +w $out/bin/nix-portable.zip
 
     sizeA=$(printf "%08x" `stat -c "%s" $out/bin/nix-portable.zip` | tac -rs ..)
     echo 504b 0304 0000 0000 0000 0000 0000 0000 | xxd -r -p >> $out/bin/nix-portable.zip
