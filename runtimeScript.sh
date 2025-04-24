@@ -395,9 +395,10 @@ index="$(cat $storeTar/closureInfo/store-paths)"
       mkdir -p "$dir"/tmp "$store"/
       rm -rf "$dir"/tmp/*
       cd "$dir"/tmp
+      # shellcheck disable=SC2086
       unzip -qqp "$self" "$(removePrefix "/" "$storeTar/tar")" \
         | "$dir"/bin/zstd -d \
-        | tar -x "$missing" --strip-components 2
+        | tar -x $missing --strip-components 2
       mv "$dir"/tmp/* "$store"/
     )
     rm -rf "$dir"/tmp
