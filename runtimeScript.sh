@@ -154,7 +154,7 @@ else
   # install busybox
   mkdir -p "$dir"/busybox/bin
   if ! [ -e "$dir/busybox/bin/busybox" ]; then
-    cp "$busyboxStaticBin"/bin/busybox "$dir/busybox/bin/busybox"
+    unzip -qqoj "$self" "$(removePrefix "/" "$busyboxStaticBin/bin/busybox")" -d "$dir/busybox/bin"
     chmod +w "$dir/busybox/bin/busybox"
   fi
   for bin in "${busyboxBins[@]}"; do

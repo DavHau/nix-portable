@@ -132,6 +132,7 @@ let
     $zip $out/bin/nix-portable.zip ${nixStaticBin}/bin/nix
     $zip $out/bin/nix-portable.zip ${prootStaticBin}/bin/proot
     $zip $out/bin/nix-portable.zip ${zstdStaticBin}/bin/zstd
+    $zip $out/bin/nix-portable.zip ${busyboxStaticBin}/bin/busybox
     $zip $out/bin/nix-portable.zip ${storeTar}/tar
     $zip $out/bin/nix-portable.zip ${caBundleZstd}
 
