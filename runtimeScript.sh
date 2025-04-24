@@ -152,8 +152,10 @@ else
 
   # install busybox
   mkdir -p "$dir"/busybox/bin
-  cp "$busyboxStaticBin"/bin/busybox "$dir/busybox/bin/busybox"
-  chmod +w "$dir/busybox/bin/busybox"
+  if ! [ -e "$dir/busybox/bin/busybox" ]; then
+    cp "$busyboxStaticBin"/bin/busybox "$dir/busybox/bin/busybox"
+    chmod +w "$dir/busybox/bin/busybox"
+  fi
   for bin in "${busyboxBins[@]}"; do
     [ ! -e "$dir/busybox/bin/$bin" ] && ln -s busybox "$dir/busybox/bin/$bin"
   done
