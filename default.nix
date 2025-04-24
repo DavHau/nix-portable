@@ -169,5 +169,6 @@ nixPortable.overrideAttrs (prev: {
   passthru = (prev.passthru or {}) // {
     bwrap = bwrapStaticBin;
     proot = prootStaticBin;
+    busybox = busyboxStaticBin;
   };
 })
