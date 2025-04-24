@@ -329,9 +329,15 @@ if [ -z "$NP_RUNTIME" ]; then
       && $NP_BWRAP --bind "$dir"/emptyroot / --bind "$dir"/ /nix --bind "$dir"/busybox/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
     debug "bwrap seems to work on this system -> will use bwrap"
     NP_RUNTIME=bwrap
-  else
-    debug "bwrap doesn't work on this system -> will use proot"
+  # check if proot works properly
+  elif \
+      debug "bwrap failed -> testing proot" \
+      && $NP_PROOT -b "$dir"/emptyroot:/ -b "$dir"/:/nix -b "$dir"/busybox/bin/busybox:"$dir/true" "$dir/true" 2>&3 ; then
+    debug "proot seems to work on this system -> will use proot"
     NP_RUNTIME=proot
+  else
+    echo "error: no runtime is working on this system"
+    exit 1
   fi
   echo -n "$NP_RUNTIME" > "$dir/conf/last_auto_runtime"
 else
