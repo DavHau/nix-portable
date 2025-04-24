@@ -4,8 +4,6 @@
 zstdStaticBin=@zstdStaticBin@
 prootStaticBin=@prootStaticBin@
 bwrapStaticBin=@bwrapStaticBin@
-# TODO? replace nix with nixStaticBin
-nix=@nix@
 nixStaticBin=@nixStaticBin@
 busyboxStaticBin=@busyboxStaticBin@
 busyboxBins=@busyboxBins@
@@ -342,7 +340,7 @@ fi
 debug "NP_RUNTIME: $NP_RUNTIME"
 if [ "$NP_RUNTIME" == "nix" ]; then
   run="$NP_NIX shell -f $dir/mini-drv.nix -c"
-  PATH="$PATH:$store$(removePrefix "/nix/store" $nix)/bin"
+  PATH="$PATH:$store$(removePrefix "/nix/store" $nixStaticBin)/bin"
   export PATH
   NP_CONF_STORE="$dir"
   recreate_nix_conf
@@ -408,7 +406,7 @@ index="$(cat $storeTar/index)"
   if [ -n "$missing" ]; then
     debug "registering new store paths to DB"
     # reg="$(cat $storeTar/closureInfo/registration)"
-    cmd="$run $store$(removePrefix "/nix/store" $nix)/bin/nix-store --load-db"
+    cmd="$run $store$(removePrefix "/nix/store" $nixStaticBin)/bin/nix-store --load-db"
     debug "running command: $cmd"
     # echo "$reg" | $cmd
   fi
@@ -433,11 +431,11 @@ elif [[ "$(basename "$0")" == nix-portable* ]]; then\
     bin="$(which "$2")"
     shift; shift
   else
-    bin="$store$(removePrefix "/nix/store" $nix)/bin/$1"
+    bin="$store$(removePrefix "/nix/store" $nixStaticBin)/bin/$1"
     shift
   fi
 else
-  bin="$store$(removePrefix "/nix/store" $nix)/bin/$(basename "$0")"
+  bin="$store$(removePrefix "/nix/store" $nixStaticBin)/bin/$(basename "$0")"
 fi
 
 
@@ -454,7 +452,7 @@ fi
 ### check if nix is functional with or without sandbox
 # sandbox-fallback is not reliable: https://github.com/NixOS/nix/issues/4719
 if [ "$newNPVersion" == "true" ] || [ "$lastRuntime" != "$NP_RUNTIME" ]; then
-  nixBin="$store$(removePrefix "/nix/store" $nix)/bin/nix"
+  nixBin="$store$(removePrefix "/nix/store" $nixStaticBin)/bin/nix"
   # if [ "$NP_RUNTIME" == "nix" ]; then
   #   nixBin="nix"
   # else
@@ -500,7 +498,7 @@ export PATH="$dir/tmpbin:$PATH"
 ### install git via nix, if git installation is not in /nix path
 if $doInstallGit && [ ! -e "$store$(removePrefix "/nix/store" $git)" ] ; then
   echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'"
-  $run "$store$(removePrefix "/nix/store" $nix)/bin/nix" build --impure --no-link --expr "
+  $run "$store$(removePrefix "/nix/store" $nixStaticBin)/bin/nix" build --impure --no-link --expr "
     (import $nixpkgsSrc {}).$gitAttribute.out
   "
 else

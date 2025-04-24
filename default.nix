@@ -94,8 +94,6 @@ let
     bundledExe = if bundledPackage == null then "" else bundledExe;
     git = git.out; # TODO why not just "git"
     inherit
-      # TODO? replace nix with nixStaticBin
-      nix
       bwrapStaticBin
       nixStaticBin
       prootStaticBin
