@@ -351,6 +351,10 @@ else
 fi
 rm -rf "$dir"/tmp/__store
 debug "NP_RUNTIME: $NP_RUNTIME"
+
+
+
+### setup runtime args
 if [ "$NP_RUNTIME" == "nix" ]; then
   run="$NP_NIX shell -f $dir/mini-drv.nix -c"
   PATH="$PATH:$store$(removePrefix "/nix/store" $nixStaticBin)/bin"
