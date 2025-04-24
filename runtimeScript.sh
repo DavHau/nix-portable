@@ -316,6 +316,7 @@ if [ -z "$NP_RUNTIME" ]; then
     last_auto_runtime=
   fi
   debug "last auto selected runtime: $last_auto_runtime"
+  rm -rf "$dir"/tmp/__store
   if [ "$last_auto_runtime" != "" ]; then
     NP_RUNTIME="$last_auto_runtime"
   # check if nix --store works
@@ -325,7 +326,7 @@ if [ -z "$NP_RUNTIME" ]; then
       && touch "$dir"/tmp/testfile \
       && "$NP_NIX" --store "$dir/tmp/__store" shell -f "$dir/mini-drv.nix" -c "$dir/bin/nix" store add-file --store "$dir/tmp/__store" "$dir/tmp/testfile" >/dev/null 2>&3; then
     chmod -R +w "$dir"/tmp/__store
-    rm -r "$dir"/tmp/__store
+    rm -rf "$dir"/tmp/__store
     debug "nix --store works on this system -> will use nix as runtime"
     NP_RUNTIME=nix
   # check if bwrap works properly
@@ -348,6 +349,7 @@ if [ -z "$NP_RUNTIME" ]; then
 else
   debug "runtime selected via NP_RUNTIME: $NP_RUNTIME"
 fi
+rm -rf "$dir"/tmp/__store
 debug "NP_RUNTIME: $NP_RUNTIME"
 if [ "$NP_RUNTIME" == "nix" ]; then
   run="$NP_NIX shell -f $dir/mini-drv.nix -c"
