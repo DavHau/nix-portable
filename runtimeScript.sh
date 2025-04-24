@@ -6,7 +6,7 @@ prootStaticBin=@prootStaticBin@
 bwrapStaticBin=@bwrapStaticBin@
 nixStaticBin=@nixStaticBin@
 busyboxStaticBin=@busyboxStaticBin@
-busyboxBins=@busyboxBins@
+busyboxBins=(@busyboxBins@)
 caBundleZstd=@caBundleZstd@
 storeTar=@storeTar@
 git=@git@
@@ -152,7 +152,7 @@ else
   (base64 -d> "$dir/busybox/bin/busybox" && chmod +x "$dir/busybox/bin/busybox") << END
 $(base64 < "$busyboxStaticBin"/bin/busybox)
 END
-  for bin in $busyboxBins; do
+  for bin in ${busyboxBins[@]}; do
     [ ! -e "$dir/busybox/bin/$bin" ] && ln -s busybox "$dir/busybox/bin/$bin"
   done
 

@@ -91,7 +91,7 @@ let
 
   runtimeScript = substituteAll {
     src = ./runtimeScript.sh;
-    busyboxBins = toString (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${busybox}/bin")));
+    busyboxBins = lib.escapeShellArgs (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${busybox}/bin")));
     bundledExe = if bundledPackage == null then "" else bundledExe;
     git = git.out; # TODO why not just "git"
     inherit
