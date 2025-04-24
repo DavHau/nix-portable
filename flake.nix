@@ -136,7 +136,7 @@
           # crashes if nixpkgs updated: error: executing 'git': No such file or directory
           pkgs.callPackage ./default.nix {
 
-            inherit prootStatic;
+            #proot = prootStatic;
 
             pkgs = pkgsDefaultChannel;
 

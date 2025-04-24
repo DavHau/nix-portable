@@ -2,8 +2,6 @@ with builtins;
 {
   bubblewrap,
   nix,
-  # TODO use pkgs.pkgsStatic.proot
-  prootStatic ? pkgs.pkgsStatic.proot,
   unzip,
   zip,
   unixtools,
@@ -12,7 +10,14 @@ with builtins;
   perl,
   cacert,
   pkgs,
-  pkgsStatic,
+  # no. pkgsStatic.nix and pkgsStatic.proot are not cached
+  # still an issue: https://github.com/NixOS/nixpkgs/issues/81137
+  # pkgsStatic,
+  busybox,
+  gnutar,
+  xz,
+  zstd,
+  proot,
   compression ? "zstd -3 -T1",
   buildSystem ? builtins.currentSystem,
   # # tar crashed on emulated aarch64 system
@@ -24,19 +29,6 @@ with builtins;
 
 with lib;
 let
-
-  proot = prootStatic;
-
-  inherit (pkgsStatic)
-    busybox
-    gnutar
-    xz
-    zstd
-    #proot
-  ;
-
-  # TODO do we need both nix and nixStatic?
-  nixStatic = pkgs.pkgsStatic.nix;
 
   pname =
     if bundledPackage == null
@@ -91,17 +83,23 @@ let
   # Some shell expressions will be evaluated at build time and some at run time.
   # Variables/expressions escaped via `\$` will be evaluated at run time
 
+  bwrapStaticBin = packStaticBin "${bubblewrap}/bin/bwrap";
+  nixStaticBin = packStaticBin "${nix}/bin/nix";
+  prootStaticBin = packStaticBin "${proot}/bin/proot";
+  zstdStaticBin = packStaticBin "${zstd}/bin/zstd";
+
   runtimeScript = substituteAll {
     src = ./runtimeScript.sh;
-    bwrapStaticBin = packStaticBin "${bubblewrap}/bin/bwrap";
-    nixStaticBin = packStaticBin "${nixStatic}/bin/nix";
-    prootStaticBin = packStaticBin "${proot}/bin/proot";
-    zstdStaticBin = packStaticBin "${zstd}/bin/zstd";
     busyboxBins = toString (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${busybox}/bin")));
     bundledExe = if bundledPackage == null then "" else bundledExe;
     git = git.out; # TODO why not just "git"
     inherit
+      # TODO? replace nix with nixStaticBin
       nix
+      bwrapStaticBin
+      nixStaticBin
+      prootStaticBin
+      zstdStaticBin
       caBundleZstd
       storeTar
       nixpkgsSrc
@@ -129,10 +127,10 @@ let
     unzip -vl $out/bin/nix-portable.zip
 
     zip="${zip}/bin/zip -0"
-    $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
-    $zip $out/bin/nix-portable.zip ${nixStatic}/bin/nix
-    $zip $out/bin/nix-portable.zip ${proot}/bin/proot
-    $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
+    $zip $out/bin/nix-portable.zip ${bwrapStaticBin}/bin/bwrap
+    $zip $out/bin/nix-portable.zip ${nixStaticBin}/bin/nix
+    $zip $out/bin/nix-portable.zip ${prootStaticBin}/bin/proot
+    $zip $out/bin/nix-portable.zip ${zstdStaticBin}/bin/zstd
     $zip $out/bin/nix-portable.zip ${storeTar}/tar
     $zip $out/bin/nix-portable.zip ${caBundleZstd}
 
@@ -155,6 +153,7 @@ let
 in
 nixPortable.overrideAttrs (prev: {
   passthru = (prev.passthru or {}) // {
-    inherit bwrap proot;
+    bwrap = bwrapStaticBin;
+    proot = prootStaticBin;
   };
 })

@@ -4,6 +4,7 @@
 zstdStaticBin=@zstdStaticBin@
 prootStaticBin=@prootStaticBin@
 bwrapStaticBin=@bwrapStaticBin@
+# TODO? replace nix with nixStaticBin
 nix=@nix@
 nixStaticBin=@nixStaticBin@
 busyboxStaticBin=@busyboxStaticBin@
