@@ -312,23 +312,9 @@ if [ -z "$NP_PROOT" ]; then NP_PROOT="$dir"/bin/proot; fi
 debug "proot executable: $NP_PROOT"
 debug "testing all available runtimes..."
 if [ -z "$NP_RUNTIME" ]; then
-  # read last automatic selected runtime from disk
-  if [ "$newNPVersion" == "true" ]; then
-    debug "removing cached auto selected runtime"
-    rm -f "$dir/conf/last_auto_runtime"
-  fi
-  if [ -f "$dir/conf/last_auto_runtime" ]; then
-    last_auto_runtime="$(cat "$dir/conf/last_auto_runtime")"
-    # FIXME validate the cache. does the cached runtime still work?
-  else
-    last_auto_runtime=
-  fi
-  debug "last auto selected runtime: $last_auto_runtime"
   rm -rf "$dir"/tmp/__store
-  if [ "$last_auto_runtime" != "" ]; then
-    NP_RUNTIME="$last_auto_runtime"
   # check if nix --store works
-  elif \
+  if \
       debug "testing nix --store" \
       && mkdir -p "$dir"/tmp/ \
       && touch "$dir"/tmp/testfile \
@@ -353,7 +339,6 @@ if [ -z "$NP_RUNTIME" ]; then
     echo "error: no runtime is working on this system"
     exit 1
   fi
-  echo -n "$NP_RUNTIME" > "$dir/conf/last_auto_runtime"
 else
   debug "runtime selected via NP_RUNTIME: $NP_RUNTIME"
 fi
