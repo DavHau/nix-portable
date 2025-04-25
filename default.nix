@@ -49,8 +49,7 @@ let
   maketar = targets:
     pkgsBuild.stdenv.mkDerivation {
       name = "nix-portable-store-tarball";
-      nativeBuildInputs = [ pkgsBuild.perl pkgsBuild.zstd ];
-      exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
+      nativeBuildInputs = [ pkgsBuild.zstd ];
       buildCommand = ''
         mkdir $out
         cp -r ${pkgsBuild.closureInfo { rootPaths = targets; }} $out/closureInfo
