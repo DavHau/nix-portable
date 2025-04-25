@@ -83,11 +83,19 @@ let
   # Some shell expressions will be evaluated at build time and some at run time.
   # Variables/expressions escaped via `\$` will be evaluated at run time
 
+  /*
   bwrapStaticBin = packStaticBin "${bubblewrap}/bin/bwrap";
   nixStaticBin = packStaticBin "${nix}/bin/nix";
   prootStaticBin = packStaticBin "${proot}/bin/proot";
   zstdStaticBin = packStaticBin "${zstd}/bin/zstd";
   busyboxStaticBin = packStaticBin "${busybox}/bin/busybox";
+  */
+
+  bwrapStaticBin = bubblewrap;
+  nixStaticBin = nix;
+  prootStaticBin = proot;
+  zstdStaticBin = zstd;
+  busyboxStaticBin = busybox;
 
   runtimeScript = substituteAll {
     src = ./runtimeScript.sh;
