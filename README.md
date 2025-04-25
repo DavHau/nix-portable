@@ -153,7 +153,7 @@ nix-portable is tested continuously on the following platforms:
 ### Under the hood
 
 - The nix-portable executable is a self extracting archive, caching its contents in $HOME/.nix-portable
-- Either nix, bubblewrap or proot is used to virtualize the /nix/store directory which actually resides in $HOME/.nix-portable/store
+- Either nix, bubblewrap or proot is used to virtualize the /nix/store directory which actually resides in $HOME/.nix-portable/nix/store
 - A default nixpkgs channel is included and the NIX_PATH variable is set accordingly.
 - Features `flakes` and `nix-command` are enabled out of the box.
 
