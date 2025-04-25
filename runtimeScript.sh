@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 
 # substituteAll interface
-zstdStaticBin=@zstdStaticBin@
-prootStaticBin=@prootStaticBin@
-bwrapStaticBin=@bwrapStaticBin@
+zstd=@zstd@
+proot=@proot@
+bubblewrap=@bubblewrap@
 nix=@nix@
-nixStaticBin=@nixStaticBin@
-busyboxStaticBin=@busyboxStaticBin@
+busybox=@busybox@
 busyboxBins=(@busyboxBins@)
 caBundleZstd=@caBundleZstd@
 storeTar=@storeTar@
@@ -171,10 +170,10 @@ else
   export PATH="$dir/busybox/bin"
 
   # install other binaries
-  installBin $zstdStaticBin "zstd"
-  installBin $prootStaticBin "proot"
-  installBin $bwrapStaticBin "bwrap"
-  installBin $nixStaticBin "nix"
+  installBin $zstd "zstd"
+  installBin $proot "proot"
+  installBin $bwrap "bwrap"
+  installBin $nix "nix"
 
   # install ssl cert bundle
   unzip $unzip_quiet -poj "$self" "$(removePrefix "/" "$caBundleZstd")" | "$dir"/bin/zstd -d > "$dir"/ca-bundle.crt

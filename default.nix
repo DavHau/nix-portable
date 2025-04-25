@@ -60,16 +60,6 @@ let
       '';
     };
 
-  packStaticBin = binPath: let
-      binName = (last (splitString "/" binPath)); in
-    pkgs.runCommand
-    binName
-    { nativeBuildInputs = [ pkgs.upx ]; }
-    ''
-      mkdir -p $out/bin
-      upx -9 -o $out/bin/${binName} ${binPath}
-    '';
-
   caBundleZstd = pkgs.runCommand "cacerts" {} "cat ${cacert}/etc/ssl/certs/ca-bundle.crt | ${zstd}/bin/zstd -19 > $out";
 
 
@@ -82,32 +72,17 @@ let
   # Some shell expressions will be evaluated at build time and some at run time.
   # Variables/expressions escaped via `\$` will be evaluated at run time
 
-  /*
-  bwrapStaticBin = packStaticBin "${bubblewrap}/bin/bwrap";
-  nixStaticBin = packStaticBin "${nix}/bin/nix";
-  prootStaticBin = packStaticBin "${proot}/bin/proot";
-  zstdStaticBin = packStaticBin "${zstd}/bin/zstd";
-  busyboxStaticBin = packStaticBin "${busybox}/bin/busybox";
-  */
-
-  bwrapStaticBin = bubblewrap;
-  nixStaticBin = nix;
-  prootStaticBin = proot;
-  zstdStaticBin = zstd;
-  busyboxStaticBin = busybox;
-
   runtimeScript = substituteAll {
     src = ./runtimeScript.sh;
     busyboxBins = lib.escapeShellArgs (attrNames (filterAttrs (d: type: type == "symlink") (readDir "${busybox}/bin")));
     bundledExe = if bundledPackage == null then "" else bundledExe;
     git = git.out; # TODO why not just "git"
     inherit
-      bwrapStaticBin
+      bubblewrap
       nix
-      nixStaticBin
-      prootStaticBin
-      zstdStaticBin
-      busyboxStaticBin
+      proot
+      zstd
+      busybox
       caBundleZstd
       storeTar
       nixpkgsSrc
@@ -139,25 +114,25 @@ let
 
     zip="${zip}/bin/zip -0"
 
-    $zip $out/bin/nix-portable.zip ${busyboxStaticBin}/bin/busybox
+    $zip $out/bin/nix-portable.zip ${busybox}/bin/busybox
 
     # we cannot unzip busybox, so we need offset and size
     # locate the first 1000 bytes of busybox in the zip archive
     busyboxOffset=$(
       cat $out/bin/nix-portable.zip | xxd -p -c0 |
-      grep -bo -m1 $(head -c1000 ${busyboxStaticBin}/bin/busybox | xxd -p -c0) |
+      grep -bo -m1 $(head -c1000 ${busybox}/bin/busybox | xxd -p -c0) |
       cut -d: -f1
     )
     # hex to bin
     busyboxOffset=$((busyboxOffset / 2))
-    busyboxSize=$(stat -c %s ${busyboxStaticBin}/bin/busybox)
+    busyboxSize=$(stat -c %s ${busybox}/bin/busybox)
     sed -i "0,/@busyboxOffset@/s//$(printf "%-15s" $busyboxOffset)/; \
       0,/@busyboxSize@/s//$(printf "%-13s" $busyboxSize)/" $out/bin/nix-portable.zip
 
-    $zip $out/bin/nix-portable.zip ${bwrapStaticBin}/bin/bwrap
-    $zip $out/bin/nix-portable.zip ${nixStaticBin}/bin/nix
-    $zip $out/bin/nix-portable.zip ${prootStaticBin}/bin/proot
-    $zip $out/bin/nix-portable.zip ${zstdStaticBin}/bin/zstd
+    $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
+    $zip $out/bin/nix-portable.zip ${nix}/bin/nix
+    $zip $out/bin/nix-portable.zip ${proot}/bin/proot
+    $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
     $zip $out/bin/nix-portable.zip ${storeTar}/tar
     $zip $out/bin/nix-portable.zip ${caBundleZstd}
 
@@ -175,10 +150,4 @@ let
     chmod +x "$target"
   '';
 in
-nixPortable.overrideAttrs (prev: {
-  passthru = (prev.passthru or {}) // {
-    bwrap = bwrapStaticBin;
-    proot = prootStaticBin;
-    busybox = busyboxStaticBin;
-  };
-})
+nixPortable
