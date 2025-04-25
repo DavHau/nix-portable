@@ -129,7 +129,7 @@ let
     sed -i "0,/@busyboxOffset@/s//$(printf "%-15s" $busyboxOffset)/; \
       0,/@busyboxSize@/s//$(printf "%-13s" $busyboxSize)/" $out/bin/nix-portable.zip
 
-    $zip $out/bin/nix-portable.zip ${bwrap}/bin/bwrap
+    $zip $out/bin/nix-portable.zip ${bubblewrap}/bin/bwrap
     $zip $out/bin/nix-portable.zip ${nix}/bin/nix
     $zip $out/bin/nix-portable.zip ${proot}/bin/proot
     $zip $out/bin/nix-portable.zip ${zstd}/bin/zstd
