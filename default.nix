@@ -7,7 +7,6 @@ with builtins;
   unixtools,
   substituteAll,
   lib,
-  perl,
   cacert,
   pkgs,
   # no. pkgsStatic.nix and pkgsStatic.proot are not cached
