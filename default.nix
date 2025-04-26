@@ -7,6 +7,9 @@ with builtins;
   unixtools,
   substituteAll,
   lib,
+  glibc,
+  ripgrep,
+  patchelf,
   cacert,
   pkgs,
   # no. pkgsStatic.nix and pkgsStatic.proot are not cached
@@ -103,6 +106,7 @@ let
       busybox
       caBundleZstd
       storeTar
+      patchelf
     ;
   };
 
@@ -110,6 +114,8 @@ let
     nativeBuildInputs = [
       unixtools.xxd
       unzip
+      glibc # ldd
+      ripgrep # rg
     ];
   }
   ''

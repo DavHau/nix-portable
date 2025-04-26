@@ -15,8 +15,10 @@ nixpkgsSrc=@nixpkgsSrc@
 bundledExe=@bundledExe@
 
 # sed interface
-busyboxOffset=@busyboxOffset@
-busyboxSize=@busyboxSize@
+# busyboxOffset=@busyboxOffset@
+# busyboxSize=@busyboxSize@
+stage1_files_sh_offset=@stage1_files_sh_offset@
+stage1_files_sh_size=@stage1_files_sh_size@
 
 set -eo pipefail
 
@@ -112,7 +114,7 @@ recreate_nix_conf(){
     echo "experimental-features = nix-command flakes"
     echo "ignored-acls = security.selinux system.nfs4_acl"
     echo "use-sqlite-wal = false"
-    echo "sandbox-paths = /bin/sh=$dir/busybox/bin/busybox"
+    echo "sandbox-paths = /bin/sh=$dir/stage1/bin/busybox"
 
     # configurable config
     echo "sandbox = $NP_CONF_SANDBOX"
@@ -149,7 +151,7 @@ PATH_OLD="$PATH"
 if [ "$newNPVersion" == "false" ]; then
 
   debug "binaries already installed"
-  export PATH="$dir/busybox/bin"
+  export PATH="$dir/stage1/bin:$dir/bin"
 
 else
 
@@ -157,26 +159,39 @@ else
 
   mkdir -p "$dir"/emptyroot
 
-  # install busybox
-  mkdir -p "$dir"/busybox/bin
-  if ! [ -e "$dir/busybox/bin/busybox" ]; then
-    tail -c+$((busyboxOffset + 1)) "$self" | head -c$busyboxSize >"$dir/busybox/bin/busybox" || true
-    chmod +x "$dir/busybox/bin/busybox"
-  fi
-  for bin in "${busyboxBins[@]}"; do
-    [ ! -e "$dir/busybox/bin/$bin" ] && ln -s busybox "$dir/busybox/bin/$bin"
+  # define arrays
+  stage1_file_path_list=()
+  stage1_file_offset_list=()
+  stage1_file_size_list=()
+  source <(tail -c+$((stage1_files_sh_offset + 1)) "$self" | head -c$stage1_files_sh_size || true)
+
+  # install stage1 files
+  for ((i=0; i<${#stage1_file_path_list[@]}; i++)); do
+    path=${stage1_file_path_list[$i]}
+    offset=${stage1_file_offset_list[$i]}
+    size=${stage1_file_size_list[$i]}
+    # TODO? use $dir instead of $dir/stage1
+    if ! [ -e "$dir/$path" ]; then
+      mkdir -p "$dir/${path%/*}"
+      tail -c+$((offset + 1)) "$self" | head -c$size >"$dir/$path" || true
+      chmod +x "$dir/$path" # TODO better. add stage1_file_mode_list
+    fi
+    # if [ ${path#*/*/*/*/} = bin/busybox ]; then
+    if [ "$path" = stage1/bin/busybox ]; then
+      # install busybox symlinks
+      for bin in "${busyboxBins[@]}"; do
+        [ ! -e "$dir/${path%/*}/$bin" ] && ln -s busybox "$dir/${path%/*}/$bin"
+        # ~/.nix-portable/stage1/bin/
+      done
+    fi
   done
 
-  export PATH="$dir/busybox/bin"
+  export PATH="$dir/stage1/bin"
 
-  # install other binaries
-  installBin $zstd "zstd"
-  installBin $proot "proot"
-  installBin $bwrap "bwrap"
-  installBin $nix "nix"
-
+  # TODO use files from nix store
   # install ssl cert bundle
-  unzip $unzip_quiet -poj "$self" "$(removePrefix "/" "$caBundleZstd")" | "$dir"/bin/zstd -d > "$dir"/ca-bundle.crt
+  # TODO? move to "$dir/stage1/etc/ssl/certs/ca-bundle.crt"
+  unzip $unzip_quiet -poj "$self" "$(removePrefix "/" "$caBundleZstd")" | zstd -d > "$dir"/ca-bundle.crt
 
   recreate_nix_conf
 fi
@@ -221,6 +236,28 @@ if [ -n "$NP_GIT" ]; then
   ln -s "$NP_GIT" "$dir/tmpbin/git"
 else
   doInstallGit=true
+fi
+
+
+
+# stage2: now we can use unzip and zstd
+
+### install nix store
+# Install all the nix store paths necessary for the current nix-portable version
+files_missing=false
+while read -r path; do
+  if [ -e "$store/${path##*/}" ]; then continue; fi
+  files_missing=true
+  break
+done < <(
+  unzip $unzip_quiet -p "$self" "$(removePrefix "/" "$storeTar/closureInfo/store-paths")"
+)
+if $files_missing; then
+  debug "extracting store paths"
+  mkdir -p "$store"
+  unzip $unzip_quiet -p "$self" "$(removePrefix "/" "$storeTar/tar")" \
+    | zstd -d \
+    | tar x -k --strip-components 2 -C "$store"
 fi
 
 
@@ -276,7 +313,15 @@ collectBinds(){
   # to a /nix/store path which doesn't exit inside the wrapped env
   # we fix this by binding busybox/bin to /bin
   if test -s /bin/sh && [[ "$(realpath /bin/sh)" == /nix/store/* ]]; then
-    toBind="$toBind $dir/busybox/bin /bin"
+    toBind="$toBind $dir/stage1/bin /bin"
+  fi
+
+  # TODO remove
+  if false; then
+  # bind all libs required by our bins
+  find "$dir/lib/nix/store" -not -type d | while read -r path; do
+    toBind="$toBind $path $(removePrefix "$dir" "$path")"
+  done
   fi
 }
 
@@ -326,15 +371,17 @@ if [ -z "$NP_RUNTIME" ]; then
     debug "nix --store works on this system -> will use nix as runtime"
     NP_RUNTIME=nix
   # check if bwrap works properly
+  # TODO? --bind "$PWD" "$PWD"
   elif \
       debug "nix --store failed -> testing bwrap" \
-      && $NP_BWRAP --bind "$dir"/emptyroot / --bind "$dir"/nix /nix --bind "$dir"/busybox/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
+      && $NP_BWRAP --bind "$dir"/emptyroot / --bind "$dir"/nix /nix --bind "$dir"/stage1/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
     debug "bwrap seems to work on this system -> will use bwrap"
     NP_RUNTIME=bwrap
   # check if proot works properly
+  # TODO? -b "$PWD:$PWD"
   elif \
       debug "bwrap failed -> testing proot" \
-      && $NP_PROOT -b "$dir"/emptyroot:/ -b "$dir"/nix:/nix -b "$dir"/busybox/bin/busybox:"$dir/true" -b "$PWD:$PWD" "$dir/true" 2>&3 ; then
+      && $NP_PROOT -b "$dir"/emptyroot:/ -b "$dir"/nix:/nix -b "$dir/stage1/bin/busybox:$dir/true" -b "$PWD:$PWD" "$dir/true" 2>&3 ; then
     debug "proot seems to work on this system -> will use proot"
     NP_RUNTIME=proot
   else
@@ -365,7 +412,7 @@ elif [ "$NP_RUNTIME" == "bwrap" ]; then
     --dev-bind /dev /dev \
     --bind $dir/nix /nix \
     $binds"
-    # --bind $dir/busybox/bin/busybox /bin/sh \
+    # --bind $dir/stage1/bin/busybox /bin/sh \
 else
   # proot
   collectBinds
@@ -376,7 +423,7 @@ else
     -b /dev:/dev \
     -b $dir/nix:/nix \
     $binds"
-    # -b $dir/busybox/bin/busybox:/bin/sh \
+    # -b $dir/stage1/bin/busybox:/bin/sh \
 fi
 debug "base command will be: $run"
 
@@ -388,12 +435,14 @@ mkdir -p "$dir"/channels
 [ -h "$dir"/channels/nixpkgs ] || ln -s $nixpkgsSrc "$dir"/channels/nixpkgs
 
 
+if false; then
 ### install nix store
 # Install all the nix store paths necessary for the current nix-portable version
 # We only unpack missing store paths from the tar archive.
 index="$(cat $storeTar/closureInfo/store-paths)"
 
 # if [ ! "$NP_RUNTIME" == "nix" ]; then
+  # TODO reduce to boolean
   missing="$(
     for path in $index; do
       if [ ! -e "$store/$(basename "$path")" ]; then
@@ -401,6 +450,7 @@ index="$(cat $storeTar/closureInfo/store-paths)"
       fi
     done
   )"
+  # TODO why?
   export missing
 
   if [ -n "$missing" ]; then
@@ -411,13 +461,15 @@ index="$(cat $storeTar/closureInfo/store-paths)"
       cd "$dir"/tmp
       # shellcheck disable=SC2086
       unzip $unzip_quiet -p "$self" "$(removePrefix "/" "$storeTar/tar")" \
-        | "$dir"/bin/zstd -d \
-        | tar -k --strip-components 2
+        | zstd -d \
+        | tar x -k --strip-components 2
       mv "$dir"/tmp/* "$store"/
     )
     rm -rf "$dir"/tmp
   fi
 
+  # TODO remove?
+  if false; then
   if [ -n "$missing" ]; then
     debug "registering new store paths to DB"
     # reg="$(cat $storeTar/closureInfo/registration)"
@@ -425,7 +477,10 @@ index="$(cat $storeTar/closureInfo/store-paths)"
     debug "running command: $cmd"
     # echo "$reg" | $cmd
   fi
+  fi
 # fi
+fi
+
 
 
 ### select executable
@@ -504,7 +559,7 @@ fi
 
 ### set PATH
 # restore original PATH and append busybox
-export PATH="$PATH_OLD:$dir/busybox/bin"
+export PATH="$PATH_OLD:$dir/stage1/bin"
 # apply overriding executable paths in $dir/tmpbin/
 export PATH="$dir/tmpbin:$PATH"
 
