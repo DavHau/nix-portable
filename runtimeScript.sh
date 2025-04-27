@@ -244,20 +244,21 @@ fi
 
 ### install nix store
 # Install all the nix store paths necessary for the current nix-portable version
-files_missing=false
-while read -r path; do
-  if [ -e "$store/${path##*/}" ]; then continue; fi
-  files_missing=true
-  break
-done < <(
-  unzip $unzip_quiet -p "$self" "$(removePrefix "/" "$storeTar/closureInfo/store-paths")"
-)
-if $files_missing; then
+missing="$(
+  while read -r path; do
+    if [ -e "$store/${path##*/}" ]; then continue; fi
+    echo "${path#*/}" # remove leading "/"
+  done < <(
+    unzip $unzip_quiet -p "$self" "$(removePrefix "/" "$storeTar/closureInfo/store-paths")"
+  )
+)"
+if [ -n "$missing" ]; then
   debug "extracting store paths"
   mkdir -p "$store"
+  # "tar -k" has return code 2 when output files exist
   unzip $unzip_quiet -p "$self" "$(removePrefix "/" "$storeTar/tar")" \
     | zstd -d \
-    | tar x -k --strip-components 2 -C "$store"
+    | tar x --strip-components 2 -C "$store" -- $missing
 fi
 
 
