@@ -115,16 +115,19 @@ function add_file() {
   if [ "$1" = "-1" ]; then is_stage1=true; shift; fi
   local file="$1"
   if $is_stage1; then
+    if false; then
     # change file path to build a FHS filesystem layout for stage1
-    local file2="stage1/${file#/*/*/*/*}"
+    #local file2="stage1/${file#/*/*/*/*}"
+    local file2="${file#/*/*/*/*}"
     if ! [ -e "$file2" ]; then
       mkdir -p "${file2%/*}"
       cp -Lp "$file" "$file2"
       chmod +w "$file2"
     fi
     file="$file2"
+    fi
     # set relative rpath to create relocatable bins and libs
-    $patchelf/bin/patchelf --set-rpath '$ORIGIN/../lib' "$file"
+    #$patchelf/bin/patchelf --set-rpath '$ORIGIN/../lib' "$file"
     # FIXME patch interpreter paths like /nix/store/rmy663w9p7xb202rcln4jjzmvivznmz8-glibc-2.40-66/lib/ld-linux-x86-64.so.2
     # no. this is not working
     # https://stackoverflow.com/questions/48452793/using-origin-to-specify-the-interpreter-in-elf-binaries-isnt-working
@@ -303,12 +306,13 @@ add_stage1_bin $busybox/bin/busybox
 
 t1=$(date +%s.%N)
 
-#add_stage1_bin $bubblewrap/bin/bwrap
-#add_stage1_bin $proot/bin/proot
+# decompressor for $storeTar/tar
 add_stage1_bin $zstd/bin/zstd
-#add_stage1_bin $nix/bin/nix # 150M result/bin/nix-portable
-# # nix needs too many libs, so we dont use add_stage1_bin
-# add_file $nix/bin/nix # 99M result/bin/nix-portable
+
+# runtime bins
+add_stage1_bin $bubblewrap/bin/bwrap
+add_stage1_bin $proot/bin/proot
+add_stage1_bin $nix/bin/nix
 
 # TODO move stage1_files.sh up in the zip archive for faster access
 #stage1_file_done

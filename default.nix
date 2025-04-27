@@ -42,8 +42,6 @@ let
   # stage1 bins
   busybox = busyboxStatic;
   zstd = zstdStatic;
-
-  # stage2 bins
   nix = nixStatic;
   bubblewrap = bubblewrapStatic;
   proot = prootStatic;

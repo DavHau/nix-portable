@@ -114,7 +114,7 @@ recreate_nix_conf(){
     echo "experimental-features = nix-command flakes"
     echo "ignored-acls = security.selinux system.nfs4_acl"
     echo "use-sqlite-wal = false"
-    echo "sandbox-paths = /bin/sh=$dir/stage1/bin/busybox"
+    echo "sandbox-paths = /bin/sh=$dir/bin/busybox"
 
     # configurable config
     echo "sandbox = $NP_CONF_SANDBOX"
@@ -151,7 +151,7 @@ PATH_OLD="$PATH"
 if [ "$newNPVersion" == "false" ]; then
 
   debug "binaries already installed"
-  export PATH="$dir/stage1/bin:$dir/bin"
+  export PATH="$dir/bin:$dir/bin"
 
 else
 
@@ -170,27 +170,27 @@ else
     path=${stage1_file_path_list[$i]}
     offset=${stage1_file_offset_list[$i]}
     size=${stage1_file_size_list[$i]}
-    # TODO? use $dir instead of $dir/stage1
+    path="${path#/*/*/*/*}" # remove "/nix/store/*/" prefix
     if ! [ -e "$dir/$path" ]; then
       mkdir -p "$dir/${path%/*}"
       tail -c+$((offset + 1)) "$self" | head -c$size >"$dir/$path" || true
       chmod +x "$dir/$path" # TODO better. add stage1_file_mode_list
     fi
     # if [ ${path#*/*/*/*/} = bin/busybox ]; then
-    if [ "$path" = stage1/bin/busybox ]; then
+    if [ "$path" = bin/busybox ]; then
       # install busybox symlinks
       for bin in "${busyboxBins[@]}"; do
         [ ! -e "$dir/${path%/*}/$bin" ] && ln -s busybox "$dir/${path%/*}/$bin"
-        # ~/.nix-portable/stage1/bin/
+        # ~/.nix-portable/bin/
       done
     fi
   done
 
-  export PATH="$dir/stage1/bin"
+  export PATH="$dir/bin"
 
   # TODO use files from nix store
   # install ssl cert bundle
-  # TODO? move to "$dir/stage1/etc/ssl/certs/ca-bundle.crt"
+  # TODO? move to "$dir/etc/ssl/certs/ca-bundle.crt"
   unzip $unzip_quiet -poj "$self" "$(removePrefix "/" "$caBundleZstd")" | zstd -d > "$dir"/ca-bundle.crt
 
   recreate_nix_conf
@@ -313,7 +313,7 @@ collectBinds(){
   # to a /nix/store path which doesn't exit inside the wrapped env
   # we fix this by binding busybox/bin to /bin
   if test -s /bin/sh && [[ "$(realpath /bin/sh)" == /nix/store/* ]]; then
-    toBind="$toBind $dir/stage1/bin /bin"
+    toBind="$toBind $dir/bin /bin"
   fi
 
   # TODO remove
@@ -374,14 +374,14 @@ if [ -z "$NP_RUNTIME" ]; then
   # TODO? --bind "$PWD" "$PWD"
   elif \
       debug "nix --store failed -> testing bwrap" \
-      && $NP_BWRAP --bind "$dir"/emptyroot / --bind "$dir"/nix /nix --bind "$dir"/stage1/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
+      && $NP_BWRAP --bind "$dir"/emptyroot / --bind "$dir"/nix /nix --bind "$dir"/bin/busybox "$dir/true" "$dir/true" 2>&3 ; then
     debug "bwrap seems to work on this system -> will use bwrap"
     NP_RUNTIME=bwrap
   # check if proot works properly
   # TODO? -b "$PWD:$PWD"
   elif \
       debug "bwrap failed -> testing proot" \
-      && $NP_PROOT -b "$dir"/emptyroot:/ -b "$dir"/nix:/nix -b "$dir/stage1/bin/busybox:$dir/true" -b "$PWD:$PWD" "$dir/true" 2>&3 ; then
+      && $NP_PROOT -b "$dir"/emptyroot:/ -b "$dir"/nix:/nix -b "$dir/bin/busybox:$dir/true" "$dir/true" 2>&3 ; then
     debug "proot seems to work on this system -> will use proot"
     NP_RUNTIME=proot
   else
@@ -412,7 +412,7 @@ elif [ "$NP_RUNTIME" == "bwrap" ]; then
     --dev-bind /dev /dev \
     --bind $dir/nix /nix \
     $binds"
-    # --bind $dir/stage1/bin/busybox /bin/sh \
+    # --bind $dir/bin/busybox /bin/sh \
 else
   # proot
   collectBinds
@@ -423,7 +423,7 @@ else
     -b /dev:/dev \
     -b $dir/nix:/nix \
     $binds"
-    # -b $dir/stage1/bin/busybox:/bin/sh \
+    # -b $dir/bin/busybox:/bin/sh \
 fi
 debug "base command will be: $run"
 
@@ -559,7 +559,7 @@ fi
 
 ### set PATH
 # restore original PATH and append busybox
-export PATH="$PATH_OLD:$dir/stage1/bin"
+export PATH="$PATH_OLD:$dir/bin"
 # apply overriding executable paths in $dir/tmpbin/
 export PATH="$dir/tmpbin:$PATH"
 
