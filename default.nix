@@ -80,7 +80,12 @@ let
 
 
   # the default nix store contents to extract when first used
-  storeTar = maketar ([ cacert nix nixpkgsSrc ] ++ lib.optional (bundledPackage != null) bundledPackage);
+  storeTar = maketar ([
+    cacert
+    nix
+    nix.man
+    nixpkgsSrc
+  ] ++ lib.optional (bundledPackage != null) bundledPackage);
 
 
   # The runtime script which unpacks the necessary files to $HOME/.nix-portable
