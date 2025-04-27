@@ -1,7 +1,10 @@
 with builtins;
 {
-  bubblewrap,
-  nix,
+  bubblewrapStatic ? pkgsStatic.bubblewrap,
+  # fix: builder failed to produce output path for output 'man'
+  # https://github.com/milahu/nixpkgs/issues/83
+  #nixStatic ? pkgsStatic.nix,
+  nixGitStatic ? pkgsStatic.nixVersions.nixComponents_git.nix-everything,
   unzip,
   zip,
   unixtools,
@@ -12,14 +15,16 @@ with builtins;
   patchelf,
   cacert,
   pkgs,
-  # no. pkgsStatic.nix and pkgsStatic.proot are not cached
-  # still an issue: https://github.com/NixOS/nixpkgs/issues/81137
-  # pkgsStatic,
-  busybox,
+  pkgsStatic,
+  busyboxStatic ? pkgsStatic.busybox,
   gnutar,
   xz,
-  zstd,
-  proot,
+  zstdStatic ? pkgsStatic.zstd,
+  # fix: ld: attempted static link of dynamic object
+  # https://gitlab.com/ita1024/waf/-/issues/2467
+  #prootStatic ? pkgsStatic.proot,
+  callPackage,
+  prootStatic ? (callPackage ./proot/alpine.nix { }),
   compression ? "zstd -3 -T1",
   buildSystem ? builtins.currentSystem,
   # # tar crashed on emulated aarch64 system
@@ -31,6 +36,17 @@ with builtins;
 
 with lib;
 let
+
+  nixStatic = nixGitStatic;
+
+  # stage1 bins
+  busybox = busyboxStatic;
+  zstd = zstdStatic;
+
+  # stage2 bins
+  nix = nixStatic;
+  bubblewrap = bubblewrapStatic;
+  proot = prootStatic;
 
   pname =
     if bundledPackage == null
