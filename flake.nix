@@ -131,27 +131,21 @@
 
           # the static proot built with nix somehow didn't work on other systems,
           # therefore using the proot static build from proot gitlab
-          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/alpine.nix { inherit pkgs; };
+          prootStatic = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/alpine.nix { inherit pkgs; };
         in
           # crashes if nixpkgs updated: error: executing 'git': No such file or directory
           pkgs.callPackage ./default.nix {
 
-            inherit proot;
+            #proot = prootStatic;
 
             pkgs = pkgsDefaultChannel;
 
             lib = inp.nixpkgs.lib;
-            compression = "zstd -3 -T1";
 
             nix = inp.nix.packages.${system}.nix;
             nixStatic = inp.nix.packages.${system}.nix-static;
 
-            busybox = pkgs.pkgsStatic.busybox;
-            bwrap = pkgs.pkgsStatic.bubblewrap;
-            gnutar = pkgs.pkgsStatic.gnutar;
-            perl = pkgs.pkgsBuildBuild.perl;
-            xz = pkgs.pkgsStatic.xz;
-            zstd = pkgs.pkgsStatic.zstd;
+            pkgsStatic = pkgs.pkgsStatic;
 
             # tar crashed on emulated aarch64 system
             buildSystem = "x86_64-linux";
