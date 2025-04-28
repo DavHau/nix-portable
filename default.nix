@@ -4,7 +4,28 @@ with builtins;
   # fix: builder failed to produce output path for output 'man'
   # https://github.com/milahu/nixpkgs/issues/83
   #nixStatic ? pkgsStatic.nix,
-  nixGitStatic ? pkgsStatic.nixVersions.nixComponents_git.nix-everything,
+  # use nix 2.21.0
+  # https://discourse.nixos.org/t/where-can-i-get-a-statically-built-nix/34253/15
+  # https://hydra.nixos.org/job/nix/master/buildStatic.x86_64-linux/all
+  stdenv,
+  nix,
+  nixGitStatic ? (stdenv.mkDerivation {
+    name = "nix-static-x86_64-unknown-linux-musl-2.21.0pre20240311_25bf671";
+    src = fetchurl {
+      url = "https://hydra.nixos.org/build/252984554/download/1/nix";
+      sha256 = "sha256:0rcxm2p38lhxz4cbxwbw432mpi8i5lmkmw6gzrw4i48ra90hn89q";
+    };
+    # ls -l $(dirname $(readlink -f $(which nix))) | grep -- '->' | cut -d' ' -f17 | xargs echo
+    nixBins = lib.escapeShellArgs (attrNames (lib.filterAttrs (d: type: type == "symlink") (readDir "${nix}/bin")));
+    buildCommand = ''
+      mkdir -p $out/bin
+      cp $src $out/bin/nix
+      chmod +x $out/bin/nix
+      for bin in $nixBins; do
+        ln -s nix $out/bin/$bin
+      done
+    '';
+  }),
   unzip,
   zip,
   unixtools,
@@ -83,7 +104,7 @@ let
   storeTar = maketar ([
     cacert
     nix
-    nix.man
+    # nix.man # not with nix 2.21.0
     nixpkgsSrc
   ] ++ lib.optional (bundledPackage != null) bundledPackage);
 
