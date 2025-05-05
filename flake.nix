@@ -361,42 +361,10 @@
                 hasPrefix "job-qemu" n && ! hasSuffix "debug" n && ! hasSuffix "all" n
               ) self.apps."${system}"));
             in
-              toString (pkgs.writeScript "job-docker-debian" ''
+              toString (pkgs.writeScript "job-qemu-all" ''
                 #!/usr/bin/env bash
                 RAND_PORT=y ${pkgs.parallel}/bin/parallel bash ::: ${toString jobs}
               '');
-            job-docker-debian.type = "app";
-            job-docker-debian.program = toString (pkgs.writeScript "job-docker-debian" ''
-              #!/usr/bin/env bash
-              set -e
-              DOCKER_CMD="''${DOCKER_CMD:-docker}"
-              export NP_DEBUG=''${NP_DEBUG:-1}
-              baseCmd="\
-                $DOCKER_CMD run -i --rm \
-                  -v ${self.packages."${system}".nix-portable}/bin/nix-portable:/nix-portable \
-                  -e NP_DEBUG \
-                  -e NP_MINIMAL"
-              ${concatStringsSep "\n" (map (cmd: "$baseCmd debian /nix-portable ${cmd}") commandsToTest)}
-              echo "all tests succeeded"
-            '');
-            job-docker-debian-debug.type = "app";
-            job-docker-debian-debug.program = toString (pkgs.writeScript "job-docker-debian-debug" ''
-              #!/usr/bin/env bash
-              set -e
-              DOCKER_CMD="''${DOCKER_CMD:-docker}"
-              export NP_DEBUG=''${NP_DEBUG:-1}
-              baseCmd="\
-                $DOCKER_CMD run -i --rm \
-                  -v ${self.packages."${system}".nix-portable}/bin/nix-portable:/nix-portable \
-                  -e NP_DEBUG \
-                  -e NP_MINIMAL"
-              if [ -n "$1" ]; then
-                $baseCmd -it debian $1
-              else
-                ${concatStringsSep "\n" (map (cmd: "$baseCmd -it debian /nix-portable ${cmd}") commandsToTest)}
-              fi
-              echo "all tests succeeded"
-            '');
             job-local.type = "app";
             job-local.program = toString (pkgs.writeScript "job-local" ''
               #!/usr/bin/env bash
