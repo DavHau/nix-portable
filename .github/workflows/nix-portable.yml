@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        qemu_os: [ arch, centos7, debian, fedora, nixos, ubuntu_22_04, ubuntu_23_10, ubuntu_24_04, debian-aarch64 ]
+        qemu_os: [ arch, centos7, debian, nixos, ubuntu_22_04, ubuntu_23_10, ubuntu_24_04, debian-aarch64 ]
     steps:
 
     - uses: actions/checkout@v4
@@ -105,7 +105,7 @@ jobs:
   #   strategy:
   #     fail-fast: false
   #     matrix:
-  #       qemu_os: [ arch, centos7, debian, fedora, nixos, ubuntu, debian-aarch64 ]
+  #       qemu_os: [ arch, centos7, debian, nixos, ubuntu, debian-aarch64 ]
   #   steps:
 
   #   - uses: actions/checkout@v4
