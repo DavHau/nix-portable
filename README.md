@@ -147,7 +147,6 @@ nix-portable is tested continuously on the following platforms:
   - Debian
 - Other Environments:
   - Github Actions
-  - Docker (debian image)
 
 ### Under the hood
 

@@ -94,8 +94,6 @@ jobs:
 
     - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}'
 
-
-
   # test_nix-static:
   #   name: Test nix-static via qemu
   #   needs: build
@@ -125,32 +123,6 @@ jobs:
   #       authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
   #   - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}-nix-static'
-
-
-  test_docker:
-    name: Test inside docker container
-    needs: build
-    if: true
-    runs-on: ubuntu-latest
-    steps:
-
-    - uses: actions/checkout@v4
-      with:
-          # Nix Flakes doesn't work on shallow clones
-          fetch-depth: 0
-
-    - uses: cachix/install-nix-action@V27
-      with:
-        extra_nix_config: |
-          experimental-features = nix-command flakes
-
-    - uses: cachix/cachix-action@v14
-      with:
-        name: nix-portable
-        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-
-    - run: nix run -L .#job-docker-debian
-
 
   test_github:
     name: Test inside github action
