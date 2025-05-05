@@ -48,11 +48,6 @@
           # permissions for user namespaces not enabled by default
           excludeRuntimes = [ "nix" "bwrap" ];
         };
-        fedora = {
-          system = "x86_64-linux";
-          url = "https://download.fedoraproject.org/pub/fedora/linux/releases/37/Cloud/x86_64/images/Fedora-Cloud-Base-37-1.7.x86_64.qcow2";
-          sha256 = "187k05x1a2r0rq0lbsxircvk7ckk0mifxxj5ayd4hrgf3v4vxfdm";
-        };
         nixos = {
           system = "x86_64-linux";
           # use iso image for nixos because building a qcow2 would require KVM

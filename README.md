@@ -139,7 +139,6 @@ nix-portable is tested continuously on the following platforms:
   - Arch Linux
   - CentOS 7
   - Debian
-  - Fedora
   - NixOS
   - Ubuntu 22.04
   - Ubuntu 23.10
