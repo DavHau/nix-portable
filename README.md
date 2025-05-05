@@ -137,14 +137,13 @@ nix-portable is tested continuously on the following platforms:
 
 - Distros (x86_64):
   - Arch Linux
-  - CentOS 7
+  - Fedora
   - Debian
   - NixOS
-  - Ubuntu 22.04
-  - Ubuntu 23.10
-  - Ubuntu 24.04
+  - Ubuntu
 - Distros (aarch64):
   - Debian
+  - NixOS
 - Other Environments:
   - Github Actions
 

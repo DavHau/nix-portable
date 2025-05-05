@@ -6,7 +6,17 @@ with lib;
     "${toString modulesPath}/installer/cd-dvd/iso-image.nix"
   ];
 
-  boot.loader.timeout = mkForce 0;
+  boot.initrd.availableKernelModules = [
+    "virtio_net"
+    "virtio_pci"
+    "virtio_mmio"
+    "virtio_blk"
+    "virtio_scsi"
+    "virtio_balloon"
+    "virtio_console"
+  ];
+
+  boot.loader.timeout = mkOverride 49 1;
 
   fileSystems."/" = {
     fsType = "tmpfs";
@@ -21,9 +31,8 @@ with lib;
 
   isoImage.squashfsCompression = "zstd -Xcompression-level 5";
 
-  users.users.test.isNormalUser = true;
-  users.users.test.openssh.authorizedKeys.keys = [ (readFile ./id_ed25519.pub) ];
-  users.users.root.openssh.authorizedKeys.keys = config.users.users.test.openssh.authorizedKeys.keys;
+  users.users.vagrant.isNormalUser = true;
+  users.users.vagrant.openssh.authorizedKeys.keyFiles = [ ./vagrant_insecure_key.pub ];
+  users.users.root.openssh.authorizedKeys.keyFiles = config.users.users.vagrant.openssh.authorizedKeys.keyFiles;
   services.openssh.enable = true;
-
 }
