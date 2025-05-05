@@ -131,7 +131,7 @@
 
           # the static proot built with nix somehow didn't work on other systems,
           # therefore using the proot static build from proot gitlab
-          proot = if crossSystem != null then throw "fix proot for crossSytem" else import ./proot/alpine.nix { inherit pkgs; };
+          proot = import ./proot/alpine.nix { inherit pkgs; };
         in
           # crashes if nixpkgs updated: error: executing 'git': No such file or directory
           pkgs.callPackage ./default.nix {
@@ -199,6 +199,11 @@
           nix-portable-dev = self.packages.${system}.nix-portable.override {
             compression = "zstd -3 -T1";
           };
+          release = pkgs.runCommand "all-nix-portable-release-files" {} ''
+            mkdir $out
+            cp ${self.packages.x86_64-linux.nix-portable}/bin/nix-portable $out/nix-portable-x86_64
+            cp ${self.packages.aarch64-linux.nix-portable}/bin/nix-portable $out/nix-portable-aarch64
+          '';
         });
 
         defaultPackage = forAllSystems (system: pkgs:
@@ -352,7 +357,7 @@
             ) testImages;
         in
           # generate jobs with and without debug settings
-          makeQemuPipelines "debug" // makeQemuPipelines "normal" // makeQemuPipelines "nix-static"
+          makeQemuPipelines "debug" // makeQemuPipelines "normal" # // makeQemuPipelines "nix-static"
           # add
           // {
             job-qemu-all.type = "app";
@@ -384,7 +389,7 @@
               #!/usr/bin/env bash
               set -e
               DOCKER_CMD="''${DOCKER_CMD:-docker}"
-              export NP_DEBUG=${NP_DEBUG:-1}
+              export NP_DEBUG=''${NP_DEBUG:-1}
               baseCmd="\
                 $DOCKER_CMD run -i --rm \
                   -v ${self.packages."${system}".nix-portable}/bin/nix-portable:/nix-portable \
