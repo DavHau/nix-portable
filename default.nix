@@ -142,6 +142,12 @@ let
     # create a directory to hold executable symlinks for overriding
     mkdir -p "\$dir/tmpbin"
 
+    # placeholder ssh binary
+    echo '#!/bin/sh' > \$dir/tmpbin/ssh
+    echo 'echo Enable SSH with NP_SSH=1 >&2' >> \$dir/tmpbin/ssh
+    echo 'exit 1' >> \$dir/tmpbin/ssh
+    chmod +x \$dir/tmpbin/ssh
+
     # create minimal drv file for nix to spawn a nix shell
     echo 'builtins.derivation {name="foo"; builder="/bin/sh"; args = ["-c" "echo hello \> \\\$out"]; system=builtins.currentSystem;}' > "\$dir/mini-drv.nix"
 
@@ -313,6 +319,9 @@ let
       if test -s /bin/sh && [[ "\$(realpath /bin/sh)" == /nix/store/* ]]; then
         toBind="\$toBind \$dir/busybox/bin /bin"
       fi
+
+      # add ssh wrapper to /bin
+      toBind="\$toBind \$dir/tmpbin/ssh /bin/ssh"
     }
 
 
@@ -535,7 +544,7 @@ let
     # restore original PATH and append busybox
     export PATH="\$PATH_OLD:\$dir/busybox/bin"
     # apply overriding executable paths in \$dir/tmpbin/
-    export PATH="\$dir/tmpbin:\$PATH"
+    export PATH="\$dir/tmpbin:\$PATH:/bin"
 
 
 
@@ -549,11 +558,44 @@ let
       debug "git already installed or manually specified"
     fi
 
+    # add ssh if the command needs ssh, or user requests
+    # - nix-copy-closure
+    # TODO: handle nix copy
+    addSsh=false
+    if [ "\$NP_RUNTIME" != "nix" ]; then
+      if [ -z "\$NP_SSH" ] && [ "\$(basename "\$bin")" == "nix-copy-closure" ]; then
+        addSsh=true
+      elif [ -n "\$NP_SSH" ] && [ "\$NP_SSH" != "0" ]; then
+        addSsh=true
+      else
+        debug 'Not installing ssh, not needed for command'
+      fi
+    else
+      debug 'Not installing ssh, using runtime "nix"'
+    fi
+
     ### override the possibly existing git in the environment with the installed one
     # excluding the case NP_GIT is set.
     if \$doInstallGit; then
       export PATH="${git.out}/bin:\$PATH"
     fi
+
+    if \$addSsh; then
+      echo "Installing ssh"
+      \$run \$store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure -o "\$dir/tmpbin/openssh" --expr "
+        (import ${nixpkgsSrc} {}).openssh.out
+      "
+      sshBin="\$(readlink -f "\$dir/tmpbin/openssh/bin")"
+      rm "\$dir/tmpbin/openssh"
+
+      # wrapper to set a valid \$SHELL in the environment
+      # (important for nix-copy-closure, which uses -o LocalCommand)
+      echo '#!/bin/sh' > \$dir/tmpbin/ssh
+      echo 'export SHELL=/bin/sh' >> \$dir/tmpbin/ssh
+      echo "exec \$sshBin/ssh "'"\$@"' >> \$dir/tmpbin/ssh
+      chmod +x \$dir/tmpbin/ssh
+    fi
+
 
 
     ### print elapsed time
