@@ -54,9 +54,6 @@
             perl = pkgs.pkgsBuildBuild.perl;
             xz = pkgs.pkgsStatic.xz;
             zstd = pkgs.pkgsStatic.zstd;
-
-            # tar crashed on emulated aarch64 system
-            buildSystem = "x86_64-linux";
           };
   in
     recursiveUpdate
@@ -87,9 +84,12 @@
           }
         );
 
-        checks = forAllSystems (system: pkgs: pkgs.callPackages ./testing/vm-tests.nix {
-          inherit (self.packages.${system}) nix-portable;
-        });
+        checks = forAllSystems (system: pkgs: pkgs.callPackages ./testing/vm-tests.nix
+          {inherit (self.packages.${system}) nix-portable;}
+          // {
+            inherit (self.packages.${system}.nix-portable);
+          }
+        );
 
         packages = forAllSystems (system: pkgs: {
           default = self.packages.${system}.nix-portable;
@@ -122,7 +122,7 @@
           checks =
             lib.getAttrs
               [ "x86_64-linux" "aarch64-linux" ]
-              (self.checks // self.packages);
+              self.checks;
         };
       };
 }
