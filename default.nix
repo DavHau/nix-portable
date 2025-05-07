@@ -6,6 +6,8 @@ with builtins;
   unzip,
   zip,
   unixtools,
+  stdenv,
+  buildPackages,
 
   busybox ? pkgs.pkgsStatic.busybox,
   cacert ? pkgs.cacert,
@@ -17,8 +19,6 @@ with builtins;
   xz ? pkgs.pkgsStatic.xz,
   zstd ? pkgs.pkgsStatic.zstd,
   nixStatic ? pkgs.pkgsStatic.nix,
-
-  buildSystem ? builtins.currentSystem,
   # hardcode executable to run. Useful when creating a bundle.
   bundledPackage ? null,
   ...
@@ -35,23 +35,21 @@ let
 
   nixpkgsSrc = pkgs.path;
 
-  pkgsBuild = import pkgs.path { system = buildSystem; };
-
   # TODO: git could be more minimal via:
   # perlSupport=false; guiSupport=false; nlsSupport=false;
   gitAttribute = "gitMinimal";
   git = pkgs."${gitAttribute}";
 
   maketar = targets:
-    pkgsBuild.stdenv.mkDerivation {
+    stdenv.mkDerivation {
       name = "nix-portable-store-tarball";
-      nativeBuildInputs = [ pkgsBuild.perl pkgsBuild.zstd ];
+      nativeBuildInputs = [ perl zstd ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
       buildCommand = ''
-        storePaths=$(perl ${pkgsBuild.pathsFromGraph} ./closure-*)
+        storePaths=$(perl ${buildPackages.pathsFromGraph} ./closure-*)
         mkdir $out
         echo $storePaths > $out/index
-        cp -r ${pkgsBuild.closureInfo { rootPaths = targets; }} $out/closureInfo
+        cp -r ${buildPackages.closureInfo { rootPaths = targets; }} $out/closureInfo
 
         tar -cf - \
           --owner=0 --group=0 --mode=u+rw,uga+r \
