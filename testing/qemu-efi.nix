@@ -2,8 +2,8 @@
 
 {
   fetchurl,
-  gzip,
   runCommand,
+  buildPackages,
 }:
 
 let
@@ -15,6 +15,6 @@ in
 
 runCommand "QEMU_EFI.img" {} ''
   cp ${qemu-efi-gz} QEMU_EFI.img.gz
-  ${gzip}/bin/gunzip QEMU_EFI.img.gz
+  ${buildPackages.gzip}/bin/gunzip QEMU_EFI.img.gz
   mv QEMU_EFI.img $out
 ''

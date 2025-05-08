@@ -8,6 +8,7 @@ with builtins;
   unixtools,
   stdenv,
   buildPackages,
+  upx,
 
   busybox ? pkgs.pkgsStatic.busybox,
   cacert ? pkgs.cacert,
@@ -62,7 +63,7 @@ let
       binName = (last (splitString "/" binPath)); in
     pkgs.runCommand
     binName
-    { nativeBuildInputs = [ pkgs.upx ]; }
+    { nativeBuildInputs = [ upx ]; }
     ''
       mkdir -p $out/bin
       upx -9 -o $out/bin/${binName} ${binPath}
