@@ -7,6 +7,45 @@ on:
     branches: [ "ci", "main" ]
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        system: [ x86_64-linux, aarch64-linux ]
+
+    steps:
+
+    - uses: actions/checkout@v4
+      with:
+          # Nix Flakes doesn't work on shallow clones
+          fetch-depth: 0
+
+    - uses: cachix/install-nix-action@V27
+      with:
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+          extra-platforms = ${{ matrix.system }}
+
+    - uses: cachix/cachix-action@v14
+      with:
+        name: nix-portable
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+      with:
+        image: tonistiigi/binfmt@sha256:8de6f2decb92e9001d094534bf8a92880c175bd5dfb4a9d8579f26f09821cfa2
+        platforms: all
+
+    - run: 'nix build -L .#packages.${{ matrix.system }}.nix-portable'
+
+    - name: Archive result
+      uses: actions/upload-artifact@v4
+      with:
+        name: nix-portable-${{ matrix.system }}
+        path: result/bin/nix-portable
 
   nix-matrix:
     runs-on: ubuntu-latest
@@ -24,7 +63,9 @@ jobs:
 
   nix-build:
     name: ${{ matrix.name }} (${{ matrix.system }})
-    needs: nix-matrix
+    needs:
+      - nix-matrix
+      - build
     runs-on: ${{ matrix.os }}
     strategy:
       matrix: ${{fromJSON(needs.nix-matrix.outputs.matrix)}}
@@ -34,141 +75,18 @@ jobs:
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes impure-derivations ca-derivations
+            extra-platforms = aarch64-linux
+      - uses: cachix/cachix-action@v14
+        with:
+          name: nix-portable
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          image: tonistiigi/binfmt@sha256:8de6f2decb92e9001d094534bf8a92880c175bd5dfb4a9d8579f26f09821cfa2
+          platforms: all
       - run: nix build -L '.#${{ matrix.attr }}'
 
-
-  # build:
-  #   runs-on: ubuntu-latest
-  #   continue-on-error: true
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       system: [ x86_64-linux, aarch64-linux ]
-
-  #   steps:
-
-  #   - uses: actions/checkout@v4
-  #     with:
-  #         # Nix Flakes doesn't work on shallow clones
-  #         fetch-depth: 0
-
-  #   - uses: cachix/install-nix-action@V27
-  #     with:
-  #       extra_nix_config: |
-  #         experimental-features = nix-command flakes
-  #         extra-platforms = ${{ matrix.system }}
-
-  #   - uses: cachix/cachix-action@v14
-  #     with:
-  #       name: nix-portable
-  #       authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-
-  #   - name: Set up QEMU
-  #     uses: docker/setup-qemu-action@v2
-  #     with:
-  #       image: tonistiigi/binfmt@sha256:8de6f2decb92e9001d094534bf8a92880c175bd5dfb4a9d8579f26f09821cfa2
-  #       platforms: all
-
-  #   - name: Install binfmt support
-  #     run: sudo apt-get install -y
-
-  #   - run: 'nix build -L .#defaultPackage.${{ matrix.system }}'
-
-  #   - name: Archive result
-  #     uses: actions/upload-artifact@v4
-  #     with:
-  #       name: nix-portable-${{ matrix.system }}
-  #       path: result/bin/nix-portable
-
-  # test_qemu_x86_64:
-  #   name: Test via qemu x86_64-linux
-  #   needs: build
-  #   if: true
-  #   runs-on: ubuntu-latest
-  #   continue-on-error: true
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       qemu_os: [ arch, centos7, debian, nixos, ubuntu_22_04, ubuntu_23_10, ubuntu_24_04 ]
-  #   steps:
-
-  #   - uses: actions/checkout@v4
-  #     with:
-  #         # Nix Flakes doesn't work on shallow clones
-  #         fetch-depth: 0
-
-  #   - uses: cachix/install-nix-action@V27
-  #     with:
-  #       extra_nix_config: |
-  #         experimental-features = nix-command flakes
-  #         extra-platforms = ${{ matrix.system }}
-
-  #   - uses: cachix/cachix-action@v14
-  #     with:
-  #       name: nix-portable
-  #       authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-
-  #   - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}'
-
-  # test_qemu_aarch64:
-  #   name: Test via qemu aarch64-linux
-  #   needs: build
-  #   if: true
-  #   runs-on: ubuntu-24.04-arm
-  #   continue-on-error: true
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       qemu_os: [ debian-aarch64 ]
-  #   steps:
-
-  #   - uses: actions/checkout@v4
-  #     with:
-  #         # Nix Flakes doesn't work on shallow clones
-  #         fetch-depth: 0
-
-  #   - uses: cachix/install-nix-action@V27
-  #     with:
-  #       extra_nix_config: |
-  #         experimental-features = nix-command flakes
-  #         extra-platforms = ${{ matrix.system }}
-
-  #   - uses: cachix/cachix-action@v14
-  #     with:
-  #       name: nix-portable
-  #       authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-
-  #   - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}'
-
-  # test_nix-static:
-  #   name: Test nix-static via qemu
-  #   needs: build
-  #   if: true
-  #   runs-on: ubuntu-latest
-  #   continue-on-error: true
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       qemu_os: [ arch, centos7, debian, nixos, ubuntu, debian-aarch64 ]
-  #   steps:
-
-  #   - uses: actions/checkout@v4
-  #     with:
-  #         # Nix Flakes doesn't work on shallow clones
-  #         fetch-depth: 0
-
-  #   - uses: cachix/install-nix-action@V27
-  #     with:
-  #       extra_nix_config: |
-  #         experimental-features = nix-command flakes
-  #         extra-platforms = ${{ matrix.system }}
-
-  #   - uses: cachix/cachix-action@v14
-  #     with:
-  #       name: nix-portable
-  #       authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-
-  #   - run: 'nix run -L .#job-qemu-${{ matrix.qemu_os }}-nix-static'
 
   test_github:
     name: Test inside github action

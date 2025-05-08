@@ -1,9 +1,11 @@
 {
-  runCommand,
   qemu,
   openssh,
   lib,
   pkgs,
+  pkgsBuildBuild,
+  system,
+  stdenv,
 
   # arguments
   image,
@@ -15,32 +17,40 @@ let
   qemu-common = import (pkgs.path + "/nixos/lib/qemu-common.nix") { inherit lib pkgs; };
 in
 
-runCommand "test-${testName}-x"
-  {
-    buildInputs = [
-      qemu
-      openssh
-    ];
-    image = image.image;
-    postBoot = image.postBoot or "";
-    doUnpack = image.doUnpack or true;
-    __impure = true;
-  }
-  ''
+stdenv.mkDerivation (finalAttrs: {
+  __impure = true;
+  name = "test-${testName}";
+  src = image.image;
+  depsBuildBuild = [
+    qemu
+    openssh
+  ];
+  postBoot = image.postBoot or "";
+  dontUnpack = image.dontUnpack or false;
+  preBuild = image.preBuild or "";
+  dontInstall = true;
+
+  rootDisk = if finalAttrs.dontUnpack then finalAttrs.src else image.rootDisk;
+
+  unpackPhase = ''
+    tar -xf $src
+  '';
+
+  buildPhase = ''
+    runHook preBuild
+
     shopt -s nullglob
 
     port=$(shuf -n 1 -i 20000-30000)
 
-    if [ -n "$doUnpack" ]; then
-      echo "Unpacking Vagrant box $image..."
-      tar xvf $image
-    else
-      cp $image ${image.rootDisk}
-    fi
+    echo "Image is: $rootDisk"
 
-    image_type=$(qemu-img info ${image.rootDisk} | sed 's/file format: \(.*\)/\1/; t; d')
+    image_type=$(qemu-img info $rootDisk | sed 's/file format: \(.*\)/\1/; t; d')
 
-    qemu-img create -b ./${image.rootDisk} -F "$image_type" -f qcow2 ./disk.qcow2
+    qemu-img create -b $rootDisk -F "$image_type" -f qcow2 ./disk.qcow2
+
+    cp ${pkgs.callPackage ./qemu-efi.nix {}} ./QEMU_EFI.img
+    chmod +w ./QEMU_EFI.img
 
     extra_qemu_opts="${image.extraQemuOpts or ""}"
 
@@ -51,10 +61,13 @@ runCommand "test-${testName}-x"
     fi
 
     echo "Starting qemu..."
-    ${qemu-common.qemuBinary qemu}\
+    ${qemu-common.qemuBinary pkgsBuildBuild.qemu}\
       -m 4096 -nographic \
+      -smp 2 \
       -drive id=disk1,file=./disk.qcow2,if=virtio \
       -netdev user,id=net0,hostfwd=tcp::$port-:22 -device virtio-net-pci,netdev=net0 \
+      ${lib.optionalString (system == "aarch64-linux")
+        "-cpu cortex-a53 -machine virt -drive if=pflash,format=raw,file=./QEMU_EFI.img"} \
       $extra_qemu_opts &
     qemu_pid=$!
     trap "kill $qemu_pid" EXIT
@@ -103,4 +116,7 @@ runCommand "test-${testName}-x"
 
     echo "Done!"
     touch $out
-  ''
+
+    runHook postBuild
+  '';
+})

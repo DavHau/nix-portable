@@ -3,7 +3,13 @@
   nix-portable,
   callPackage,
   system,
-  nixos,
+  pkgsBuildHost,
+  runCommand,
+  cloud-utils,
+  writeText,
+
+  # custom
+  pkgsNative ? pkgsBuildHost,
 }:
 let
   inherit (builtins // lib)
@@ -25,6 +31,25 @@ let
     "bwrap"
   ];
 
+  nixos = pkgsNative.nixos;
+
+  cloudInitFile = writeText "cloud-init" ''
+    #cloud-config
+    users:
+      - name: vagrant
+        ssh_authorized_keys:
+          - "${lib.removeSuffix "\n" (builtins.readFile ./vagrant_insecure_key.pub)}"
+      - name: root
+        ssh_authorized_keys:
+          - "${lib.removeSuffix "\n" (builtins.readFile ./vagrant_insecure_key.pub)}"
+  '';
+
+  cloudInitImg = runCommand "cloud-init-img"
+    {nativeBuildInputs = [cloud-utils];}
+    ''
+      cloud-localds $out ${cloudInitFile}
+    '';
+
   images.aarch64-linux = {
     nixos = {
       image = (toString (nixos {
@@ -33,26 +58,58 @@ let
         ];
       }).config.system.build.isoImage) + "/iso/nixos.iso";
       system = "aarch64-linux";
-      rootDisk = "nixos.qcow2";
-      doUnpack = false;
+      dontUnpack = true;
+      disabledRuntimes = ["proot"];
     };
-    arch = {
+    debian10 = {
       image = import <nix/fetchurl.nix> {
-        # retrieved url via:
-        # - browse https://portal.cloud.hashicorp.com/vagrant/discover/generic/debian12
-        # - open dev tools
-        # - click download link
-        # - inspect response of first request
-        url = "https://api.cloud.hashicorp.com/vagrant-archivist/v1/object/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOiI3YzM1MzViMy05YzYwLTQ5MTYtYjdiYy1lN2E4ZjUyNmJiOWQiLCJtb2RlIjoiciIsImZpbGVuYW1lIjoiZGViaWFuMTJfNC4zLjEyX2xpYnZpcnRfYXJtNjQuYm94In0.h6VetZYYrRt3TzlBBHpX71ZQGlY-FgAciuqrW8fnJJs";
-        name = "arch-libvirt.box";
-        hash = "sha256-BzeallAt7BArTqp7qx1yfuAQhNoPuPEeZM1CHCdD5Mg=";
+        url = "https://cdimage.debian.org/cdimage/cloud/buster/20240703-1797/debian-10-generic-arm64-20240703-1797.qcow2";
+        hash = "sha256-nHYkDXWun+HthVw/kwwKPvUNi5GBiBAy9TEH3ObvvPU=";
+        name = "debian10.qcow2";
       };
-      rootDisk = "box_0.img";
+      dontUnpack = true;
       system = "aarch64-linux";
-      postBoot = ''
-        sudo rm -f /etc/resolv.conf
-        sudo ln -s /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+      extraQemuOpts = "-drive file=cloud-init.img,format=raw,if=virtio";
+      preBuild = ''
+        echo "Copying cloud-init image ${cloudInitImg} to cloud-init.img"
+        cp ${cloudInitImg} cloud-init.img
+        chmod +w cloud-init.img
       '';
+      disabledRuntimes = noUserNs;
+    };
+    debian11 = {
+      image = import <nix/fetchurl.nix> {
+        url = "https://cdimage.debian.org/cdimage/cloud/bullseye/20250505-2103/debian-11-genericcloud-arm64-20250505-2103.qcow2";
+        hash = "sha256-GKVl1WaT9Up1KhN9VjvedPcrQLNyT5+TaxfNYKTC7zE=";
+        name = "debian11.qcow2";
+      };
+      dontUnpack = true;
+      system = "aarch64-linux";
+      extraQemuOpts = "-drive file=cloud-init.img,format=raw,if=virtio";
+      preBuild = ''
+        echo "Copying cloud-init image ${cloudInitImg} to cloud-init.img"
+        cp ${cloudInitImg} cloud-init.img
+        chmod +w cloud-init.img
+      '';
+      disabledRuntimes = ["proot"];
+    };
+    debian12 = {
+      image = import <nix/fetchurl.nix> {
+        # url = "https://cdimage.debian.org/cdimage/cloud/bookworm/20250428-2096/debian-12-nocloud-arm64-20250428-2096.qcow2";
+        # hash = "sha256-6Pb7PSutDjeg/Mdh6E2aXznTKhLRGzFdNlkW4Af8CFc=";
+        url = "https://cdimage.debian.org/cdimage/cloud/bookworm/20250428-2096/debian-12-genericcloud-arm64-20250428-2096.qcow2";
+        hash = "sha256-exC5YUEP4KQ7MXqzgJ/Hb8bBrmbJtlaVeb4K/Lfw6vY=";
+        name = "debian12.qcow2";
+      };
+      dontUnpack = true;
+      system = "aarch64-linux";
+      extraQemuOpts = "-drive file=cloud-init.img,format=raw,if=virtio";
+      preBuild = ''
+        echo "Copying cloud-init image ${cloudInitImg} to cloud-init.img"
+        cp ${cloudInitImg} cloud-init.img
+        chmod +w cloud-init.img
+      '';
+      disabledRuntimes = ["nix" "proot"];
     };
   };
 
@@ -65,7 +122,7 @@ let
       }).config.system.build.isoImage) + "/iso/nixos.iso";
       system = "x86_64-linux";
       rootDisk = "nixos.qcow2";
-      doUnpack = false;
+      dontUnpack = true;
     };
     arch = {
       image = import <nix/fetchurl.nix> {
@@ -185,7 +242,7 @@ let
   announce = cmd: ''echo -e "\ntesting cmd: ${cmd}"'';
   escape = cmd: replaceStrings [''"''] [''\"''] cmd;
   mkCmd = runtime: cmd: let
-    vars = "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_MINIMAL=$NP_MINIMAL NP_LOCATION=/np_tmp";
+    vars = "NP_RUNTIME=${runtime} NP_DEBUG=$NP_DEBUG NP_LOCATION=/np_tmp";
   in ''
     ${announce (escape cmd)}
     $ssh "${vars} /home/vagrant/nix-portable ${escape cmd}"
@@ -219,7 +276,7 @@ let
       NP_DEBUG=''${NP_DEBUG:-1}
       # test if automatic runtime selection works
       echo "testing automatic runtime selection..."
-      if ! $ssh "NP_DEBUG=$NP_DEBUG /home/vagrant/nix-portable nix-shell -p hello --run hello"; then
+      if ! $ssh "NP_DEBUG=$NP_DEBUG NP_LOCATION=/np_tmp /home/vagrant/nix-portable nix-shell -p hello --run hello"; then
         echo "Error: automatic runtime selection failed"
         exit 1
       fi

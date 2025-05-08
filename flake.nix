@@ -26,7 +26,7 @@
       forAllSystems = f: genAttrs supportedSystems
         (system: f system (import inp.nixpkgs { inherit system; }));
 
-      nixPortableForSystem = { system, crossSystem ? null,  }:
+      nixPortableForSystem = { system, crossSystem ? null,  } @ args:
         let
           pkgsDefaultChannel = import inp.defaultChannel { inherit system crossSystem; };
           pkgs = import inp.nixpkgs { inherit system crossSystem; };
@@ -45,8 +45,8 @@
             lib = inp.nixpkgs.lib;
             compression = "zstd -3 -T1";
 
-            nix = inp.nix.packages.${system}.nix;
-            nixStatic = inp.nix.packages.${system}.nix-static;
+            nix = inp.nix.packages.${pkgs.stdenv.buildPlatform.system}.nix;
+            nixStatic = inp.nix.packages.${pkgs.stdenv.buildPlatform.system}.nix-static;
 
             busybox = pkgs.pkgsStatic.busybox;
             bwrap = pkgs.pkgsStatic.bubblewrap;
@@ -84,12 +84,26 @@
           }
         );
 
-        checks = forAllSystems (system: pkgs: pkgs.callPackages ./testing/vm-tests.nix
-          {inherit (self.packages.${system}) nix-portable;}
-          // {
-            inherit (self.packages.${system}.nix-portable);
-          }
-        );
+        checks =
+          lib.recursiveUpdate
+          (forAllSystems (system: pkgs:
+            pkgs.callPackages ./testing/vm-tests.nix {inherit (self.packages.${system}) nix-portable;}
+          ))
+          # github doesn't have KVM in aarch64 runners. -> run aarch64 vm tests on x86_64
+          {
+            x86_64-linux =
+              let
+                system = "x86_64-linux";
+                crossSystem = "aarch64-linux";
+                pkgs = import inp.nixpkgs { inherit system crossSystem; };
+              in
+              lib.mapAttrs'
+              (name: drv: {name = name + "-aarch64-linux"; value = drv;})
+              (pkgs.callPackages ./testing/vm-tests.nix {
+                nix-portable = self.packages.${crossSystem}.nix-portable;
+                pkgsNative = inp.nixpkgs.legacyPackages.${crossSystem};
+              });
+          };
 
         packages = forAllSystems (system: pkgs: {
           default = self.packages.${system}.nix-portable;
@@ -110,6 +124,7 @@
             cp ${self.packages.x86_64-linux.nix-portable}/bin/nix-portable $out/nix-portable-x86_64
             cp ${self.packages.aarch64-linux.nix-portable}/bin/nix-portable $out/nix-portable-aarch64
           '';
+          qemu-efi-aarch64 = pkgs.callPackage ./testing/qemu-efi.nix {};
         });
       })
       { packages = (genAttrs [ "x86_64-linux" ] (system:
@@ -121,7 +136,7 @@
         githubActions = nix-github-actions.lib.mkGithubMatrix {
           checks =
             lib.getAttrs
-              [ "x86_64-linux" "aarch64-linux" ]
+              [ "x86_64-linux" ]
               self.checks;
         };
       };
