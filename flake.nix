@@ -21,7 +21,7 @@
 
       lib = inp.nixpkgs.lib;
 
-      supportedSystems = [ "x86_64-linux" "aarch64-linux" "armv7l-linux" ];
+      supportedSystems = [ "x86_64-linux" "aarch64-linux" ];
 
       forAllSystems = f: genAttrs supportedSystems
         (system: f system (import inp.nixpkgs { inherit system; }));
@@ -86,7 +86,7 @@
 
         apps = forAllSystems (system: pkgs: {
           test-local.type = "app";
-          test-local.program = pkgs.writeScriptBin "test-local" ''
+          test-local.program = toString (pkgs.writeScript "test-local" ''
             #!/usr/bin/env bash
             set -e
             export NP_DEBUG=''${NP_DEBUG:-1}
@@ -96,7 +96,7 @@
               ) (import ./testing/test-commands.nix))
             ))}
             echo "all tests succeeded"
-          '';
+          '');
         });
 
         checks =
