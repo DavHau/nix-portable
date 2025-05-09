@@ -171,16 +171,6 @@ let
       system = "x86_64-linux";
     };
 
-    ubuntu-16-04 = {
-      image = import <nix/fetchurl.nix> {
-        url = vagrantUrl "generic" "ubuntu1604" "4.1.12";
-        hash = "sha256-lO4oYQR2tCh5auxAYe6bPOgEqOgv3Y3GC1QM1tEEEU8=";
-      };
-      rootDisk = "box.img";
-      system = "x86_64-linux";
-      disabledRuntimes = ["nix"];
-    };
-
     ubuntu-22-04 = {
       image = import <nix/fetchurl.nix> {
         url = vagrantUrl "generic" "ubuntu2204" "4.1.12";
