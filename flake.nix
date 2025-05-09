@@ -84,6 +84,21 @@
           }
         );
 
+        apps = forAllSystems (system: pkgs: {
+          test-local.type = "app";
+          test-local.program = pkgs.writeScriptBin "test-local" ''
+            #!/usr/bin/env bash
+            set -e
+            export NP_DEBUG=''${NP_DEBUG:-1}
+            ${concatStringsSep "\n\n" (forEach [ "bwrap" "proot" ] (runtime:
+              concatStringsSep "\n" (map (cmd:
+                ''${self.packages."${system}".nix-portable}/bin/nix-portable ${cmd}''
+              ) (import ./testing/test-commands.nix))
+            ))}
+            echo "all tests succeeded"
+          '';
+        });
+
         checks =
           lib.recursiveUpdate
           (forAllSystems (system: pkgs:
