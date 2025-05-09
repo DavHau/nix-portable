@@ -90,7 +90,7 @@ jobs:
 
   test_github:
     name: Test inside github action
-    needs: nix-build
+    needs: build
     if: true
     runs-on: ubuntu-latest
     steps:
@@ -105,4 +105,4 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
 
-    - run: nix run -L .#job-local
+    - run: nix run -L .#test-local
