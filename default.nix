@@ -451,7 +451,7 @@ let
         reg="$(cat ${storeTar}/closureInfo/registration)"
         cmd="\$run \$store${lib.removePrefix "/nix/store" nix}/bin/nix-store --load-db"
         debug "running command: \$cmd"
-        # echo "\$reg" | \$cmd
+        echo "\$reg" | \$cmd
       fi
     # fi
 
