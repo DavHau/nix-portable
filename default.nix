@@ -270,7 +270,7 @@ let
       ### gather paths to bind for proot
       # we cannot bind / to / without running into a lot of trouble, therefore
       # we need to collect all top level directories and bind them inside an empty root
-      pathsTopLevel="\$(find / -mindepth 1 -maxdepth 1 -not -name nix -not -name dev)"
+      pathsTopLevel="\$(find / -mindepth 1 -maxdepth 1 -not -name nix -not -name dev -not -type s)"
 
 
       toBind=""
