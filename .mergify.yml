@@ -2,9 +2,8 @@ queue_rules:
   - name: default
 defaults:
   actions:
-    queue:
-      allow_merging_configuration_change: true
-      method: rebase
+  queue_rule:
+    merge_method: rebase
 pull_request_rules:
   - name: merge using the merge queue
     conditions:

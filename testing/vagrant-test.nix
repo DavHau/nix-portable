@@ -49,8 +49,8 @@ stdenv.mkDerivation (finalAttrs: {
 
     qemu-img create -b $rootDisk -F "$image_type" -f qcow2 ./disk.qcow2
 
-    cp ${pkgs.callPackage ./qemu-efi.nix {}} ./QEMU_EFI.img
-    chmod +w ./QEMU_EFI.img
+    cp ${pkgsBuildBuild.qemu}/share/qemu/edk2-aarch64-code.fd QEMU_EFI.fd
+    chmod +w QEMU_EFI.fd
 
     extra_qemu_opts="${image.extraQemuOpts or ""}"
 
@@ -67,7 +67,8 @@ stdenv.mkDerivation (finalAttrs: {
       -drive id=disk1,file=./disk.qcow2,if=virtio \
       -netdev user,id=net0,hostfwd=tcp::$port-:22 -device virtio-net-pci,netdev=net0 \
       ${lib.optionalString (system == "aarch64-linux")
-        "-cpu cortex-a53 -machine virt -drive if=pflash,format=raw,file=./QEMU_EFI.img"} \
+        "-cpu cortex-a53 -machine virt -pflash ./QEMU_EFI.fd"
+      } \
       $extra_qemu_opts &
     qemu_pid=$!
     trap "kill $qemu_pid" EXIT
@@ -79,7 +80,7 @@ stdenv.mkDerivation (finalAttrs: {
     chmod 0400 ./vagrant_insecure_key
 
     export HOME=$(realpath .)
-    ssh_opts="-o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -i ./vagrant_insecure_key"
+    ssh_opts="-o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o ControlPath=none -i ./vagrant_insecure_key"
     ssh="ssh -p $port -q $ssh_opts vagrant@localhost"
     echo "ssh command: $ssh"
     sshRoot="ssh -p $port -q $ssh_opts root@localhost"

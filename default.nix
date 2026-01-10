@@ -10,7 +10,7 @@ with builtins;
   buildPackages,
   upx,
 
-  busybox ? pkgs.pkgsStatic.busybox,
+  busybox,
   cacert ? pkgs.cacert,
   compression ? "zstd -19 -T0",
   gnutar ? pkgs.pkgsStatic.gnutar,
@@ -19,7 +19,7 @@ with builtins;
   pkgs ? import <nixpkgs> {},
   xz ? pkgs.pkgsStatic.xz,
   zstd ? pkgs.pkgsStatic.zstd,
-  nixStatic ? pkgs.pkgsStatic.nix,
+  nixStatic,
   # hardcode executable to run. Useful when creating a bundle.
   bundledPackage ? null,
   ...
@@ -42,15 +42,18 @@ let
   git = pkgs."${gitAttribute}";
 
   maketar = targets:
+    let
+      closureInfo = buildPackages.closureInfo { rootPaths = targets; };
+    in
     stdenv.mkDerivation {
       name = "nix-portable-store-tarball";
       nativeBuildInputs = [ perl zstd ];
       exportReferencesGraph = map (x: [("closure-" + baseNameOf x) x]) targets;
       buildCommand = ''
-        storePaths=$(perl ${buildPackages.pathsFromGraph} ./closure-*)
+        storePaths=$(cat ${closureInfo}/store-paths)
         mkdir $out
         echo $storePaths > $out/index
-        cp -r ${buildPackages.closureInfo { rootPaths = targets; }} $out/closureInfo
+        cp -r ${closureInfo} $out/closureInfo
 
         tar -cf - \
           --owner=0 --group=0 --mode=u+rw,uga+r \

@@ -52,11 +52,15 @@ let
 
   images.aarch64-linux = {
     nixos = {
-      image = (toString (nixos {
-        imports = [
-          ./nixos-iso.nix
-        ];
-      }).config.system.build.isoImage) + "/iso/nixos.iso";
+      image =
+        let
+          nixosSystem = (nixos {
+            imports = [
+              ./nixos-iso.nix
+            ];
+          });
+        in
+          (toString nixosSystem.config.system.build.isoImage) + "/iso/${nixosSystem.config.system.build.isoImage.isoName}";
       system = "aarch64-linux";
       dontUnpack = true;
       disabledRuntimes = ["proot"];
@@ -115,11 +119,15 @@ let
 
   images.x86_64-linux = {
     nixos = {
-      image = (toString (nixos {
-        imports = [
-          ./nixos-iso.nix
-        ];
-      }).config.system.build.isoImage) + "/iso/nixos.iso";
+      image =
+        let
+          nixosSystem = (nixos {
+            imports = [
+              ./nixos-iso.nix
+            ];
+          });
+        in
+          (toString nixosSystem.config.system.build.isoImage) + "/iso/${nixosSystem.config.system.build.isoImage.isoName}";
       system = "x86_64-linux";
       rootDisk = "nixos.qcow2";
       dontUnpack = true;
