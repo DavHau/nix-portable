@@ -176,7 +176,8 @@ The following environment variables are optional and can be used to override the
 ```txt
 NP_DEBUG      (1 = debug msgs; 2 = 'set -x' for nix-portable)
 NP_GIT        specify path to the git executable
-NP_LOCATION   where to put the `.nix-portable` dir. (defaults to `$HOME`)
+NP_LOCATION   where to put the data dir. (defaults to `$HOME`)
+NP_DIRNAME    name of the data dir. (defaults to `.nix-portable`)
 NP_RUNTIME    which runtime to use (must be one of: nix, bwrap, proot)
 NP_NIX        specify the path to the static nix executable to use in case nix is selected as runtime
 NP_BWRAP      specify the path to the bwrap executable to use in case bwrap is selected as runtime
