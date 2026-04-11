@@ -572,7 +572,7 @@ let
 
     ### install git via nix, if git installation is not in /nix path
     if \$doInstallGit && [ ! -e \$store${lib.removePrefix "/nix/store" git.out} ] ; then
-      echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'"
+      echo "Installing git. Disable this by specifying the git executable path with 'NP_GIT'" >&2
       \$run \$store${lib.removePrefix "/nix/store" nix}/bin/nix build --impure --no-link --expr "
         (import ${nixpkgsSrc} {}).${gitAttribute}.out
       "
@@ -599,8 +599,58 @@ let
     fi
 
 
+    maybeHandleHomeManagerSwitch(){
+      [ "\$(basename "\$bin")" == "nix" ] || return 1
+      [ "\$1" == "run" ] || return 1
+      [ "\$2" == "github:nix-community/home-manager" ] || return 1
+      [ "\$3" == "--" ] || return 1
+      [ "\$4" == "switch" ] || return 1
+      [ "\$5" == "--flake" ] || return 1
+      [ -n "\$6" ] || return 1
+      [ "\$#" -eq 6 ] || return 1
+
+      flakeRef="\$6"
+      hmName="\${flakeRef##*#}"
+      hmSource="\${flakeRef%#*}"
+      [ "\$hmName" != "\$flakeRef" ] || return 1
+
+      case "\$hmSource" in
+        path:/*)
+          localPath="\${hmSource#path:}"
+          ;;
+        /*)
+          localPath="\$hmSource"
+          ;;
+        *)
+          return 1
+          ;;
+      esac
+
+      [ -e "\$localPath" ] || return 1
+
+      debug "rewriting home-manager switch for local flake path: \$localPath"
+      storeRef="\$($NP_RUN \$bin store add-path "\$localPath")"
+      drvPath="\$($NP_RUN \$bin eval --raw "\$storeRef#homeConfigurations.\\\"\$hmName\\\".activationPackage.drvPath")"
+      generationPath="\$($NP_RUN \$store${lib.removePrefix "/nix/store" nix}/bin/nix-store -r "\$drvPath" | tail -n 1)"
+      hostGenerationPath="\$store/\$(basename "\$generationPath")"
+      patchedActivate="/tmp/hm-activate-\$\$.sh"
+
+      debug "storeRef: \$storeRef"
+      debug "drvPath: \$drvPath"
+      debug "generationPath: \$generationPath"
+
+      cp "\$hostGenerationPath/activate" "\$patchedActivate"
+      chmod u+w "\$patchedActivate"
+      perl -0pi -e 's@_iNote "Activating %s" "installPackages"\n.*?unset INSTALL_CMD INSTALL_CMD_ACTUAL LIST_CMD REMOVE_CMD_SYNTAX\n@_iNote "Activating %s" "installPackages"\n_i "Skipping home-manager-path profile installation under nix-portable proot"\n\n@s' "\$patchedActivate"
+      chmod +x "\$patchedActivate"
+
+      exec $NP_RUN "\$patchedActivate"
+    }
+
+
     ### run commands
     [ -z "\$NP_RUN" ] && NP_RUN="\$run"
+    maybeHandleHomeManagerSwitch "\$@" || true
     if [ "\$NP_RUNTIME" == "proot" ]; then
       debug "running command: \$NP_RUN \$bin \$@"
       exec \$NP_RUN \$bin "\$@"
