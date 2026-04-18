@@ -8,7 +8,7 @@
     # Error: checking whether build environment is sane... ls: cannot access './configure': No such file or directory
     defaultChannel.url = "nixpkgs/nixos-unstable";
 
-    nix.url = "nix/2.20.6";
+    nix.url = "nix/2.34.6";
 
     nix-github-actions.url = "github:nix-community/nix-github-actions";
     nix-github-actions.inputs.nixpkgs.follows = "nixpkgs";
@@ -46,7 +46,7 @@
             compression = "zstd -3 -T1";
 
             nix = inp.nix.packages.${pkgs.stdenv.buildPlatform.system}.nix;
-            nixStatic = inp.nix.packages.${pkgs.stdenv.buildPlatform.system}.nix-static;
+            nixStatic = inp.nix.packages.${pkgs.stdenv.buildPlatform.system}.nix-cli-static;
 
             busybox = pkgs.pkgsStatic.busybox;
             bwrap = pkgs.pkgsStatic.bubblewrap;
